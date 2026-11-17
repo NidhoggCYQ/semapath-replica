@@ -1,258 +1,272 @@
 <template>
   <TooltipProvider :delay-duration="200">
-    <div
-      data-testid="chat-page-shell"
-      :data-generating="String(isGenerating)"
-      class="chat-page-shell relative grid h-full min-h-0 w-full min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
-    >
-      <ChatTopBar
-        class="chat-capture-hide"
-        :session-id="props.sessionId"
-        :title="sessionTitle"
-        :project="sessionProject"
-        :is-read-only="isReadOnlySession"
-      />
+    <div class="flex h-full min-h-0 min-w-0 w-full overflow-hidden">
       <div
-        v-if="isChatSearchOpen"
-        class="pointer-events-none absolute inset-x-0 top-3 px-6"
-        style="z-index: var(--dc-z-float)"
+        data-testid="chat-page-shell"
+        :data-generating="String(isGenerating)"
+        class="chat-page-shell relative grid h-full min-h-0 flex-1 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden"
       >
-        <div class="mx-auto flex w-full max-w-5xl justify-end">
-          <ChatSearchBar
-            :ref="setChatSearchBarRef"
-            v-model="chatSearchQuery"
-            class="pointer-events-auto"
-            :active-match="activeChatSearchIndex"
-            :total-matches="chatSearchResults.length"
-            @previous="goToPreviousChatSearchMatch"
-            @next="goToNextChatSearchMatch"
-            @close="closeChatSearch"
-          />
-        </div>
-      </div>
-      <div data-testid="chat-viewport-region" class="relative min-h-0 min-w-0">
+        <ChatTopBar
+          class="chat-capture-hide"
+          :session-id="props.sessionId"
+          :title="sessionTitle"
+          :project="sessionProject"
+          :is-read-only="isReadOnlySession"
+        />
         <div
-          ref="scrollContainer"
-          data-testid="chat-page"
-          class="message-list-container relative h-full min-h-0 w-full min-w-0 overflow-y-auto"
-          :class="{ 'dc-list-scrolling': isListScrolling }"
-          @scroll.passive="onScroll"
-          @scrollend.passive="listGestures.onListScrollEnd"
-          @wheel.passive="onWheel"
-          @touchstart.passive="listGestures.onListTouchStart"
-          @touchmove.passive="listGestures.onListTouchMove"
-          @touchend.passive="listGestures.onListTouchEnd"
-          @touchcancel.passive="listGestures.onListTouchCancel"
-          @pointerdown.passive="listGestures.onListPointerDown"
-          @pointermove.passive="listGestures.onListPointerMove"
-          @pointerup.passive="listGestures.onListPointerEnd"
-          @pointercancel.passive="listGestures.onListPointerEnd"
+          v-if="isChatSearchOpen"
+          class="pointer-events-none absolute inset-x-0 top-3 px-6"
+          style="z-index: var(--dc-z-float)"
         >
-          <div ref="messageSearchRoot" class="min-h-full">
-            <div
-              v-if="messageStore.isLoadingHistory"
-              data-testid="history-loading-indicator"
-              class="pointer-events-none sticky top-14 z-10 h-0 overflow-visible px-6 text-center"
-            >
-              <span
-                data-testid="history-loading-label"
-                class="inline-flex rounded-full bg-background/80 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur-sm"
-              >
-                {{ t('common.loading') }}
-              </span>
-            </div>
-            <div
-              v-else-if="messageStore.historyLoadError"
-              data-testid="history-load-error"
-              class="sticky top-14 z-10 h-0 overflow-visible px-6 text-center"
-              role="alert"
-            >
-              <div
-                class="inline-flex items-center gap-2 rounded-full bg-background/80 px-2 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur-sm"
-              >
-                <span>{{ t('common.error.requestFailed') }}</span>
-                <DcButton
-                  data-testid="history-load-retry"
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  class="h-6 px-2 text-xs"
-                  @click="void retryOlderMessages()"
-                >
-                  {{ t('thread.toolbar.retry') }}
-                </DcButton>
-              </div>
-            </div>
-            <MessageList
-              ref="messageListRef"
-              :messages="visibleDisplayMessages"
-              :resolve-capture-parent-id="resolveCaptureParentId"
-              :before-spacer-height="messageWindowBeforeHeight"
-              :after-spacer-height="messageWindowAfterHeight"
-              :conversation-id="props.sessionId"
-              :ephemeral-rate-limit-block="ephemeralRateLimitBlock"
-              :ephemeral-rate-limit-message-id="ephemeralRateLimitMessageId"
-              :is-generating="isGenerating"
-              :streaming-message-id="streamingMessageId"
-              :trace-message-ids="traceMessageIds"
-              :is-read-only="isReadOnlySession"
-              :latest-assistant-message-id="latestAssistantMessageId"
-              :disable-markdown-virtualization="isChatSearchOpen"
-              @retry="onMessageRetry"
-              @delete="onMessageDelete"
-              @fork="onMessageFork"
-              @continue="onMessageContinue"
-              @trace="onMessageTrace"
-              @tape-inspector="onMessageTapeInspector"
-              @edit-save="onMessageEditSave"
-              @measure="onMessageMeasure"
+          <div class="mx-auto flex w-full max-w-5xl justify-end">
+            <ChatSearchBar
+              :ref="setChatSearchBarRef"
+              v-model="chatSearchQuery"
+              class="pointer-events-auto"
+              :active-match="activeChatSearchIndex"
+              :total-matches="chatSearchResults.length"
+              @previous="goToPreviousChatSearchMatch"
+              @next="goToNextChatSearchMatch"
+              @close="closeChatSearch"
             />
-            <div class="h-px w-full" aria-hidden="true" />
+          </div>
+        </div>
+        <div data-testid="chat-viewport-region" class="relative min-h-0 min-w-0">
+          <div
+            ref="scrollContainer"
+            data-testid="chat-page"
+            class="message-list-container relative h-full min-h-0 w-full min-w-0 overflow-y-auto"
+            :class="{ 'dc-list-scrolling': isListScrolling }"
+            @scroll.passive="onScroll"
+            @scrollend.passive="listGestures.onListScrollEnd"
+            @wheel.passive="onWheel"
+            @touchstart.passive="listGestures.onListTouchStart"
+            @touchmove.passive="listGestures.onListTouchMove"
+            @touchend.passive="listGestures.onListTouchEnd"
+            @touchcancel.passive="listGestures.onListTouchCancel"
+            @pointerdown.passive="listGestures.onListPointerDown"
+            @pointermove.passive="listGestures.onListPointerMove"
+            @pointerup.passive="listGestures.onListPointerEnd"
+            @pointercancel.passive="listGestures.onListPointerEnd"
+          >
+            <div ref="messageSearchRoot" class="min-h-full">
+              <div
+                v-if="messageStore.isLoadingHistory"
+                data-testid="history-loading-indicator"
+                class="pointer-events-none sticky top-14 z-10 h-0 overflow-visible px-6 text-center"
+              >
+                <span
+                  data-testid="history-loading-label"
+                  class="inline-flex rounded-full bg-background/80 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur-sm"
+                >
+                  {{ t('common.loading') }}
+                </span>
+              </div>
+              <div
+                v-else-if="messageStore.historyLoadError"
+                data-testid="history-load-error"
+                class="sticky top-14 z-10 h-0 overflow-visible px-6 text-center"
+                role="alert"
+              >
+                <div
+                  class="inline-flex items-center gap-2 rounded-full bg-background/80 px-2 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur-sm"
+                >
+                  <span>{{ t('common.error.requestFailed') }}</span>
+                  <DcButton
+                    data-testid="history-load-retry"
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    class="h-6 px-2 text-xs"
+                    @click="void retryOlderMessages()"
+                  >
+                    {{ t('thread.toolbar.retry') }}
+                  </DcButton>
+                </div>
+              </div>
+              <MessageList
+                ref="messageListRef"
+                :messages="visibleDisplayMessages"
+                :resolve-capture-parent-id="resolveCaptureParentId"
+                :before-spacer-height="messageWindowBeforeHeight"
+                :after-spacer-height="messageWindowAfterHeight"
+                :conversation-id="props.sessionId"
+                :ephemeral-rate-limit-block="ephemeralRateLimitBlock"
+                :ephemeral-rate-limit-message-id="ephemeralRateLimitMessageId"
+                :is-generating="isGenerating"
+                :streaming-message-id="streamingMessageId"
+                :trace-message-ids="traceMessageIds"
+                :is-read-only="isReadOnlySession"
+                :latest-assistant-message-id="latestAssistantMessageId"
+                :disable-markdown-virtualization="isChatSearchOpen"
+                @retry="onMessageRetry"
+                @delete="onMessageDelete"
+                @fork="onMessageFork"
+                @continue="onMessageContinue"
+                @trace="onMessageTrace"
+                @tape-inspector="onMessageTapeInspector"
+                @edit-save="onMessageEditSave"
+                @measure="onMessageMeasure"
+              />
+              <div class="h-px w-full" aria-hidden="true" />
+            </div>
+          </div>
+          <div
+            v-if="isSessionViewPreparing"
+            data-testid="chat-session-loading-overlay"
+            class="pointer-events-none absolute inset-0 overflow-hidden bg-background"
+            style="z-index: var(--dc-z-sticky)"
+            role="status"
+            aria-live="polite"
+            aria-busy="true"
+            :aria-label="t('common.loading')"
+          >
+            <ChatSessionSkeleton />
           </div>
         </div>
         <div
-          v-if="isSessionViewPreparing"
-          data-testid="chat-session-loading-overlay"
-          class="pointer-events-none absolute inset-0 overflow-hidden bg-background"
+          v-if="isReadOnlySession && activePendingInteraction"
+          data-testid="chat-read-only-interaction-region"
+          class="chat-capture-hide relative w-full px-6 pb-3 pt-3"
           style="z-index: var(--dc-z-sticky)"
-          role="status"
-          aria-live="polite"
-          aria-busy="true"
-          :aria-label="t('common.loading')"
         >
-          <ChatSessionSkeleton />
+          <ChatToolInteractionOverlay
+            class="pointer-events-auto mx-auto"
+            :interaction="activePendingInteraction"
+            :processing="isHandlingInteraction"
+            @respond="onToolInteractionRespond"
+          />
         </div>
-      </div>
-      <div
-        v-if="isReadOnlySession && activePendingInteraction"
-        data-testid="chat-read-only-interaction-region"
-        class="chat-capture-hide relative w-full px-6 pb-3 pt-3"
-        style="z-index: var(--dc-z-sticky)"
-      >
-        <ChatToolInteractionOverlay
-          class="pointer-events-auto mx-auto"
-          :interaction="activePendingInteraction"
-          :processing="isHandlingInteraction"
-          @respond="onToolInteractionRespond"
-        />
-      </div>
-      <!-- Composer is outside message scroll geometry. -->
-      <div
-        v-if="!isReadOnlySession"
-        data-testid="chat-composer-region"
-        class="chat-capture-hide relative w-full min-w-0 px-6 pb-3 pt-3"
-        style="z-index: var(--dc-z-sticky)"
-      >
-        <div class="mx-auto flex w-full max-w-5xl min-w-0 flex-col items-center">
-          <div class="relative w-full">
-            <PendingInputLane
-              :queue-items="pendingInputStore.queueItems"
-              :disable-steer-action="pendingInputStore.isAtCapacity"
-              :disable-queue-steer-action="disableQueueSteerAction"
-              :show-resume-action="showPendingQueueResume"
-              :resume-disabled="disablePendingQueueResume"
-              :resume-loading="pendingInputStore.resumingQueue"
-              :retrying-item-id="pendingInputStore.retryingItemId"
-              class="mx-auto mb-1.5 max-w-4xl"
-              @update-queue="onPendingInputUpdate"
-              @move-queue="onPendingInputMove"
-              @steer-queue="onPendingInputSteer"
-              @delete-queue="onPendingInputDelete"
-              @resume-queue="onPendingInputResume"
-              @retry-queue="onPendingInputRetry"
-              @resolve-blocked="onPendingInputResolve"
-            />
-            <!-- Anchor the plan/question float to the outer .relative (which includes the queue lane)
+        <!-- Composer is outside message scroll geometry. -->
+        <div
+          v-if="!isReadOnlySession"
+          data-testid="chat-composer-region"
+          class="chat-capture-hide relative w-full min-w-0 px-6 pb-3 pt-3"
+          style="z-index: var(--dc-z-sticky)"
+        >
+          <div class="mx-auto flex w-full max-w-5xl min-w-0 flex-col items-center">
+            <div class="relative w-full">
+              <PendingInputLane
+                :queue-items="pendingInputStore.queueItems"
+                :disable-steer-action="pendingInputStore.isAtCapacity"
+                :disable-queue-steer-action="disableQueueSteerAction"
+                :show-resume-action="showPendingQueueResume"
+                :resume-disabled="disablePendingQueueResume"
+                :resume-loading="pendingInputStore.resumingQueue"
+                :retrying-item-id="pendingInputStore.retryingItemId"
+                class="mx-auto mb-1.5 max-w-4xl"
+                @update-queue="onPendingInputUpdate"
+                @move-queue="onPendingInputMove"
+                @steer-queue="onPendingInputSteer"
+                @delete-queue="onPendingInputDelete"
+                @resume-queue="onPendingInputResume"
+                @retry-queue="onPendingInputRetry"
+                @resolve-blocked="onPendingInputResolve"
+              />
+              <!-- Anchor the plan/question float to the outer .relative (which includes the queue lane)
                  so bottom:calc(100%+0.75rem) lifts it above PendingInputLane instead of covering it. -->
-            <div>
-              <div
-                v-if="latestPlanSnapshot || activePendingInteraction"
-                class="pointer-events-none absolute inset-x-0 bottom-[calc(100%+0.75rem)] flex w-full flex-col items-center gap-2"
-                style="z-index: var(--dc-z-float)"
-                data-testid="agent-progress-float-layer"
-              >
-                <!-- Slim dock bar with Plan/Question chips; at most one panel expands above it. -->
-                <ChatInteractionDock
-                  :plan-snapshot="latestPlanSnapshot"
-                  :plan-collapsed="isPlanFloatCollapsed"
-                  :interaction="activePendingInteraction"
-                  :processing="isHandlingInteraction"
-                  @set-plan-collapsed="agentPlanStore.setCollapsed(props.sessionId, $event)"
-                  @dismiss-plan="onDismissPlanFloat"
-                  @respond="onToolInteractionRespond"
-                />
-              </div>
-              <div
-                ref="chatInputHeroHostRef"
-                data-testid="chat-input-memory-host"
-                class="mx-auto flex w-full max-w-4xl flex-col"
-              >
-                <!-- Keep input/status mounted during permission/question so TipTap draft, IME,
-                     and StatusBar watchers are not torn down. Hide with v-show + inert. -->
+              <div>
                 <div
-                  v-show="!activePendingInteraction"
-                  class="flex w-full flex-col"
-                  :aria-hidden="activePendingInteraction ? 'true' : undefined"
-                  :inert="activePendingInteraction ? true : undefined"
+                  v-if="latestPlanSnapshot || activePendingInteraction"
+                  class="pointer-events-none absolute inset-x-0 bottom-[calc(100%+0.75rem)] flex w-full flex-col items-center gap-2"
+                  style="z-index: var(--dc-z-float)"
+                  data-testid="agent-progress-float-layer"
                 >
-                  <MemoryUpdateChip :visible="!activePendingInteraction" />
-                  <ChatInputBox
-                    ref="chatInputRef"
-                    v-model="message"
-                    max-width-class="max-w-4xl"
-                    :files="attachedFiles"
-                    :session-id="props.sessionId"
-                    :agent-id="sessionStore.activeSession?.agentId ?? 'deepchat'"
-                    :workspace-path="sessionStore.activeSession?.projectDir ?? null"
-                    :is-acp-session="sessionStore.activeSession?.providerId === 'acp'"
-                    :supports-vision="composerSupportsVision"
-                    :is-generating="isGenerating"
-                    :submit-disabled="isInputSubmitDisabled"
-                    :queue-submit-enabled="isGenerating && hasDraftInput"
-                    :queue-submit-disabled="isQueueSubmitDisabled"
-                    :is-attachment-preparation-pending="isPreparingAttachments"
-                    @update:files="onFilesChange"
-                    @command-submit="onCommandSubmit"
-                    @draft-change="recordComposerDocumentChange"
-                    @pending-skills-change="recordComposerSkillsChange"
-                    @queue-submit="onQueueSubmit"
-                    @submit="onSubmit"
-                    @switch-vision-model="switchToVisionModel"
-                    @toggle-voice-input="onToggleVoiceInput"
+                  <!-- Slim dock bar with Plan/Question chips; at most one panel expands above it. -->
+                  <ChatInteractionDock
+                    :plan-snapshot="latestPlanSnapshot"
+                    :plan-collapsed="isPlanFloatCollapsed"
+                    :interaction="activePendingInteraction"
+                    :processing="isHandlingInteraction"
+                    @set-plan-collapsed="agentPlanStore.setCollapsed(props.sessionId, $event)"
+                    @dismiss-plan="onDismissPlanFloat"
+                    @respond="onToolInteractionRespond"
+                  />
+                </div>
+                <div
+                  ref="chatInputHeroHostRef"
+                  data-testid="chat-input-memory-host"
+                  class="mx-auto flex w-full max-w-4xl flex-col"
+                >
+                  <!-- Keep input/status mounted during permission/question so TipTap draft, IME,
+                     and StatusBar watchers are not torn down. Hide with v-show + inert. -->
+                  <div
+                    v-show="!activePendingInteraction"
+                    class="flex w-full flex-col"
+                    :aria-hidden="activePendingInteraction ? 'true' : undefined"
+                    :inert="activePendingInteraction ? true : undefined"
                   >
-                    <template #toolbar>
-                      <ChatInputToolbar
-                        :is-generating="isGenerating"
-                        :has-input="hasDraftInput"
-                        :send-disabled="isInputSubmitDisabled"
-                        :queue-disabled="isQueueSubmitDisabled"
-                        :steer-disabled="disableQueueSteerAction"
-                        :is-stopping="isStopping"
-                        :show-voice-input="isVoiceInputEnabled"
-                        :is-voice-input-listening="isVoiceInputListening"
-                        :is-voice-input-transcribing="isVoiceInputTranscribing"
-                        :is-preparing-attachments="isPreparingAttachments"
-                        :show-search="isSearchAvailable"
-                        :search-enabled="isSearchEnabled"
-                        @attach="onAttach"
-                        @toggle-search="toggleSearch"
-                        @voice-input="onToggleVoiceInput"
-                        @queue="onQueueSubmit"
-                        @steer="onSteer"
-                        @send="onSubmit"
-                        @cancel-preparation="cancelAttachmentPreparation"
-                        @stop="onStop"
-                      />
-                    </template>
-                  </ChatInputBox>
-                  <ChatStatusBar ref="chatStatusBarRef" max-width-class="max-w-4xl" />
+                    <MemoryUpdateChip :visible="!activePendingInteraction" />
+                    <ChatInputBox
+                      ref="chatInputRef"
+                      v-model="message"
+                      :prediction="composerPrediction"
+                      :prediction-blocked="isVoiceInputListening || isVoiceInputTranscribing"
+                      @prediction-dismiss="dismissComposerPrediction"
+                      max-width-class="max-w-4xl"
+                      :files="attachedFiles"
+                      :session-id="props.sessionId"
+                      :agent-id="sessionStore.activeSession?.agentId ?? 'deepchat'"
+                      :workspace-path="sessionStore.activeSession?.projectDir ?? null"
+                      :is-acp-session="sessionStore.activeSession?.providerId === 'acp'"
+                      :supports-vision="composerSupportsVision"
+                      :is-generating="isGenerating"
+                      :submit-disabled="isInputSubmitDisabled"
+                      :queue-submit-enabled="isGenerating && hasDraftInput"
+                      :queue-submit-disabled="isQueueSubmitDisabled"
+                      :is-attachment-preparation-pending="isPreparingAttachments"
+                      @update:files="onFilesChange"
+                      @command-submit="onCommandSubmit"
+                      @draft-change="recordComposerDocumentChange"
+                      @pending-skills-change="recordComposerSkillsChange"
+                      @queue-submit="onQueueSubmit"
+                      @submit="onSubmit"
+                      @switch-vision-model="switchToVisionModel"
+                      @toggle-voice-input="onToggleVoiceInput"
+                    >
+                      <template #toolbar>
+                        <ChatInputToolbar
+                          :is-generating="isGenerating"
+                          :has-input="hasDraftInput"
+                          :send-disabled="isInputSubmitDisabled"
+                          :queue-disabled="isQueueSubmitDisabled"
+                          :steer-disabled="disableQueueSteerAction"
+                          :is-stopping="isStopping"
+                          :show-voice-input="isVoiceInputEnabled"
+                          :is-voice-input-listening="isVoiceInputListening"
+                          :is-voice-input-transcribing="isVoiceInputTranscribing"
+                          :is-preparing-attachments="isPreparingAttachments"
+                          :show-search="isSearchAvailable"
+                          :search-enabled="isSearchEnabled"
+                          @attach="onAttach"
+                          @toggle-search="toggleSearch"
+                          @voice-input="onToggleVoiceInput"
+                          @queue="onQueueSubmit"
+                          @steer="onSteer"
+                          @send="onSubmit"
+                          @cancel-preparation="cancelAttachmentPreparation"
+                          @stop="onStop"
+                        />
+                      </template>
+                    </ChatInputBox>
+                    <ChatStatusBar ref="chatStatusBarRef" max-width-class="max-w-4xl" />
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <AnalysisContextDetails
+        v-if="analysisInteraction.detailsOpen.value"
+        :view="analysisInteraction.detailsView.value"
+        :loading="analysisInteraction.detailsLoading.value"
+        :error="analysisInteraction.detailsError.value"
+        @close="analysisInteraction.detailsOpen.value = false"
+        @locate="analysisInteraction.locate"
+      />
     </div>
+    <AnalysisQuoteToolbar v-if="analysisInteraction.canQuote.value" :root="scrollContainer" />
     <TraceDialog :message-id="traceMessageId" @close="traceMessageId = null" />
     <MemoryTurnDialog :read-only="isReadOnlySession" />
     <AttachmentPreparationDialog
@@ -278,6 +292,7 @@
       :open="showDeleteMessageDialog"
       :title="t('dialog.deleteMessage.title')"
       :description="t('dialog.deleteMessage.description')"
+      description-class="text-foreground/75"
       :danger="true"
       :confirm-label="t('dialog.deleteMessage.confirm')"
       :cancel-label="t('dialog.cancel')"
@@ -289,7 +304,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject } from 'vue'
+import {
+  ref,
+  computed,
+  watch,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+  onUnmounted,
+  inject
+} from 'vue'
 import type { JSONContent } from '@tiptap/core'
 import { useI18n } from 'vue-i18n'
 import { TooltipProvider } from '@shadcn/components/ui/tooltip'
@@ -347,7 +371,13 @@ import { useDisplayMessages } from './composables/useDisplayMessages'
 import { useChatSearch } from './composables/useChatSearch'
 import { useListGestures } from './composables/useListGestures'
 import { useMessageVirtualization } from './composables/useMessageVirtualization'
+import { useComposerPrediction } from './composables/useComposerPrediction'
 import { useComposerSubmit } from './composables/useComposerSubmit'
+import { useAnalysisChatInteraction } from './composables/useAnalysisChatInteraction'
+import AnalysisContextDetails from '@/components/analysis/AnalysisContextDetails.vue'
+import AnalysisQuoteToolbar from '@/components/analysis/AnalysisQuoteToolbar.vue'
+import type { AnalysisInsertion } from '@/components/analysis/interactionContext'
+import type { AnalysisContext } from '@shared/analysisInteraction'
 import { useSessionRestore } from './composables/useSessionRestore'
 import { useVoiceInput } from './composables/useVoiceInput'
 import { useToolInteraction } from './composables/useToolInteraction'
@@ -359,6 +389,13 @@ import { findLatestAssistantMessageId } from '@/features/chat-page/model/display
 
 const props = defineProps<{
   sessionId: string
+  analysisTaskId?: string
+  analysisInsertion?: AnalysisInsertion | null
+}>()
+const emit = defineEmits<{
+  'analysis-inserted': [key: string]
+  'analysis-locate': [context: AnalysisContext]
+  'session-forked': [sessionId: string]
 }>()
 
 const performanceReporter = inject<RendererPerformanceReporter | null>(
@@ -1019,6 +1056,26 @@ watch(
   { immediate: true, flush: 'post' }
 )
 
+const deliveryObserved = new Set<string>()
+const unsubscribeDelivery = chatClient.onStreamUpdated((payload) => {
+  if (payload.sessionId !== props.sessionId || deliveryObserved.has(payload.messageId)) return
+  deliveryObserved.add(payload.messageId)
+  if (deliveryObserved.size > 100) deliveryObserved.delete(deliveryObserved.values().next().value!)
+  void sessionClient
+    .recordMessageDelivery(payload.sessionId, payload.messageId, 'client_update_received')
+    .catch(() => {})
+  void nextTick(() =>
+    requestAnimationFrame(() => {
+      if (payload.sessionId !== props.sessionId) return
+      if (!document.querySelector(`[data-message-id="${CSS.escape(payload.messageId)}"]`)) return
+      void sessionClient
+        .recordMessageDelivery(payload.sessionId, payload.messageId, 'client_first_render')
+        .catch(() => {})
+    })
+  )
+})
+onBeforeUnmount(unsubscribeDelivery)
+
 const traceMessageIds = computed(() =>
   messageStore.messages
     .filter(
@@ -1068,6 +1125,7 @@ const chatInputRef = ref<{
   triggerAttach: () => void
   insertRecognizedText?: (text: string) => void
   insertWorkspaceReference?: (targetPath: string) => boolean
+  insertAnalysisContext?: (context: AnalysisContext, question: string) => boolean
   getInlineItemsSnapshot?: () => UserMessageInlineItem[]
   getPendingSkillsSnapshot?: () => string[]
   consumePendingSkills?: () => string[]
@@ -1207,7 +1265,72 @@ const {
   t
 })
 
+const { suggestion: composerPrediction, dismiss: dismissComposerPrediction } =
+  useComposerPrediction({
+    context: () => {
+      const latest = messageStore.messages.at(-1)
+      const session = sessionStore.activeSession
+      if (
+        !latest ||
+        latest.sessionId !== props.sessionId ||
+        latest.role !== 'assistant' ||
+        latest.status !== 'sent' ||
+        !session ||
+        session.id !== props.sessionId ||
+        session.providerId === 'acp'
+      )
+        return null
+      try {
+        const meta = JSON.parse(latest.metadata || '{}')
+        if (
+          (meta.runOutcome && meta.runOutcome !== 'completed') ||
+          (meta.runStopReason && meta.runStopReason !== 'complete')
+        )
+          return null
+      } catch {
+        return null
+      }
+      return {
+        sessionId: props.sessionId,
+        messageId: latest.id,
+        revision: JSON.stringify([
+          latest.updatedAt,
+          session.providerId,
+          session.modelId,
+          uiSettingsStore.composerPredictionSettings,
+          uiSettingsStore.composerPredictionRevision
+        ])
+      }
+    },
+    enabled: () =>
+      uiSettingsStore.composerPredictionsEnabled &&
+      !isGenerating.value &&
+      !isReadOnlySession.value &&
+      !isSessionViewPreparing.value &&
+      !isPreparingAttachments.value &&
+      !activePendingInteraction.value &&
+      !isHandlingInteraction.value &&
+      !isVoiceInputListening.value &&
+      !isVoiceInputTranscribing.value &&
+      pendingInputStore.queueItems.length === 0,
+    hasDraft: () => hasDraftInput.value,
+    fetch: (sessionId, messageId) => sessionClient.getComposerPrediction(sessionId, messageId)
+  })
+
 switchComposerSessionDraft = switchComposerSession
+
+const analysisInteraction = useAnalysisChatInteraction({
+  sessionId: () => props.sessionId,
+  taskId: () => props.analysisTaskId,
+  insertion: () => props.analysisInsertion,
+  preparing: isSessionViewPreparing,
+  ready: computed(() => !!chatInputRef.value),
+  readOnly: isReadOnlySession,
+  insert: (context, question) =>
+    chatInputRef.value?.insertAnalysisContext?.(context, question) ?? false,
+  inserted: (key) => emit('analysis-inserted', key),
+  locate: (context) => emit('analysis-locate', context)
+})
 
 watch(
   [() => props.sessionId, isSessionViewPreparing],
@@ -1240,6 +1363,14 @@ const {
   clearForSessionChange
 } = useMessageActions({
   sessionId: () => props.sessionId,
+  isGenerating: () => isGenerating.value,
+  ...(props.analysisTaskId
+    ? {
+        forked: async (id: string) => {
+          emit('session-forked', id)
+        }
+      }
+    : {}),
   isReadOnlySession,
   hasBlockingInteraction: () =>
     Boolean(activePendingInteraction.value) || isHandlingInteraction.value,
@@ -1380,9 +1511,11 @@ onMounted(() => {
   })
 })
 
+onBeforeUnmount(() => {
+  disposeComposerSubmit()
+})
 onUnmounted(() => {
   deactivateSessionRestore()
-  disposeComposerSubmit()
   cacheCurrentMessageMeasurements()
   cleanupVoiceInput()
   cancelAllPlanSnapshotClearTimers()

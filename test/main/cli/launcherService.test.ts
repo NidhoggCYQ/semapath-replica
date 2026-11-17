@@ -74,6 +74,32 @@ afterEach(async () => {
 })
 
 describe('CliLauncherService', () => {
+  it('uses a replica command directory without touching another Windows command', async () => {
+    const fixture = await createFixture('win32')
+    const launcherDirectory = path.join(fixture.userDataDirectory, 'bin')
+    const foreignDirectory = path.join(fixture.localAppDataDirectory, 'Microsoft', 'WindowsApps')
+    await mkdir(foreignDirectory, { recursive: true })
+    const foreignCommand = path.join(foreignDirectory, 'deepchat.cmd')
+    await writeFile(foreignCommand, 'foreign command')
+    const service = new CliLauncherService({
+      platform: 'win32',
+      homeDirectory: fixture.homeDirectory,
+      userDataDirectory: fixture.userDataDirectory,
+      launcherDirectory,
+      localAppDataDirectory: fixture.localAppDataDirectory,
+      environmentPath: launcherDirectory + ';C:\\Windows\\System32',
+      resolveCliDirectory: () => fixture.cliDirectory
+    })
+    await expect(service.ensureInstalled()).resolves.toMatchObject({
+      state: 'installed',
+      commandPath: path.join(launcherDirectory, 'deepchat.cmd')
+    })
+    expect(await readFile(foreignCommand, 'utf8')).toBe('foreign command')
+    expect(await readFile(path.join(launcherDirectory, 'deepchat.cmd'), 'utf8')).toContain(
+      'ELECTRON_RUN_AS_NODE'
+    )
+  })
+
   it('installs and reverses a POSIX launcher without changing existing shell content', async () => {
     const fixture = await createFixture()
     const profilePath = path.join(fixture.homeDirectory, '.zprofile')

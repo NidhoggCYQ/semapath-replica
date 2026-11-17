@@ -5,6 +5,7 @@
     data-testid="settings-general-page"
   >
     <div class="flex w-full flex-col gap-3">
+      <ComposerPredictionSettingsSection />
       <UploadFileSettingsSection />
       <ProxySettingsSection />
       <CommandShellSettingsSection />
@@ -47,6 +48,7 @@
 </template>
 
 <script setup lang="ts">
+import ComposerPredictionSettingsSection from './common/ComposerPredictionSettingsSection.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useUiSettingsStore } from '@/stores/uiSettingsStore'

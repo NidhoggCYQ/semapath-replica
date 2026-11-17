@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'fs/promises'
+import { mkdir, mkdtemp, readFile, rename, rm, stat, symlink, writeFile } from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { gunzipSync } from 'zlib'
@@ -762,6 +762,38 @@ describe('afterPack', () => {
         }
       })
     ).resolves.toBeUndefined()
+  })
+
+  it('includes native optional dependencies from an external pnpm virtual store', async () => {
+    const afterPack = await loadAfterPack()
+    const projectDir = path.join(tmpDir, 'project')
+    const nodeModulesDir = path.join(tmpDir, 'resources', 'app.asar.unpacked', 'node_modules')
+    await seedWindowsArm64NativePrerequisites(projectDir, nodeModulesDir)
+    const source = path.join(
+      projectDir, 'node_modules', '.pnpm', 'node_modules', '@ff-labs', 'fff-bin-win32-arm64'
+    )
+    const externalStore = path.join(tmpDir, 'external-store')
+    const target = path.join(
+      externalStore, '@ff-labs+fff-bin-win32-arm64@0.9.6', 'node_modules',
+      '@ff-labs', 'fff-bin-win32-arm64'
+    )
+    for (const directory of [source, target]) {
+      const relative = path.relative(tmpDir, directory)
+      if (relative.startsWith('..') || path.isAbsolute(relative))
+        throw new Error('Test fixture must remain inside its temporary directory')
+    }
+    await mkdir(path.dirname(target), { recursive: true })
+    await rename(source, target)
+    await writeFile(
+      path.join(projectDir, 'node_modules', '.modules.yaml'),
+      JSON.stringify({ virtualStoreDir: externalStore })
+    )
+    await afterPack({
+      targets: [], appOutDir: tmpDir, electronPlatformName: 'win32', arch: 'arm64',
+      packager: { projectDir }
+    })
+    await expect(readFile(path.join(nodeModulesDir, '@ff-labs', 'fff-bin-win32-arm64', 'fff.dll'), 'utf8'))
+      .resolves.toBe('native')
   })
 
   it('fails fast when FFF node output is missing for supported packages', async () => {

@@ -1,4 +1,8 @@
 import { z } from 'zod'
+import {
+  ComposerPredictionSettingsSchema,
+  ComposerPredictionStatusSchema
+} from '../../composerPrediction'
 import { AgentCommandShellConfigSchema, GitBashAvailabilitySchema } from '../../commandShell'
 import { TimestampMsSchema, defineRouteContract } from '../common'
 
@@ -8,6 +12,10 @@ export const SETTINGS_KEYS = [
   'codeFontFamily',
   'artifactsEffectEnabled',
   'autoScrollEnabled',
+  'composerPredictionsEnabled',
+  'composerPredictionSettings',
+  'composerPredictionStatus',
+  'composerPredictionRevision',
   'autoCompactionEnabled',
   'autoCompactionTriggerThreshold',
   'autoCompactionRetainRecentPairs',
@@ -30,6 +38,10 @@ export const SettingsSnapshotValuesSchema = z.object({
   codeFontFamily: z.string(),
   artifactsEffectEnabled: z.boolean(),
   autoScrollEnabled: z.boolean(),
+  composerPredictionsEnabled: z.boolean(),
+  composerPredictionSettings: ComposerPredictionSettingsSchema,
+  composerPredictionStatus: ComposerPredictionStatusSchema,
+  composerPredictionRevision: z.number().int().nonnegative(),
   autoCompactionEnabled: z.boolean(),
   autoCompactionTriggerThreshold: z.number().int(),
   autoCompactionRetainRecentPairs: z.number().int(),
@@ -45,6 +57,11 @@ export const SettingsSnapshotValuesSchema = z.object({
 })
 
 export const SettingsChangeSchema = z.discriminatedUnion('key', [
+  z.object({ key: z.literal('composerPredictionsEnabled'), value: z.boolean() }),
+  z.object({
+    key: z.literal('composerPredictionSettings'),
+    value: ComposerPredictionSettingsSchema
+  }),
   z.object({
     key: z.literal('fontSizeLevel'),
     value: z.number().int().min(0).max(4)

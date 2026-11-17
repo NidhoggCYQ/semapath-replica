@@ -3,6 +3,11 @@
     <template v-for="(block, index) in contentBlocks" :key="index">
       <!-- 文本块 -->
       <span v-if="block.type === 'text'">{{ block.content }}</span>
+      <AnalysisReferenceChip
+        v-else-if="block.type === 'analysis'"
+        :context-id="block.contextId"
+        :label="block.label"
+      />
 
       <!-- Mention 块 -->
       <span
@@ -58,6 +63,7 @@ import type {
 import { getVisibleMentionLabel } from '@/features/chat-page/model/displayUserMessageText'
 import { useLanguageStore } from '@/stores/language'
 import ChatAttachmentItem from '@/components/chat/ChatAttachmentItem.vue'
+import AnalysisReferenceChip from '@/components/analysis/AnalysisReferenceChip.vue'
 
 const MENTION_ICON_MAP: Record<string, string> = {
   context: 'lucide:quote',
@@ -74,6 +80,7 @@ const MENTION_ICON_MAP: Record<string, string> = {
 }
 
 type ContentBlock =
+  | { type: 'analysis'; contextId: string; label: string }
   | DisplayUserMessageTextBlock
   | DisplayUserMessageMentionBlock
   | DisplayUserMessageCodeBlock

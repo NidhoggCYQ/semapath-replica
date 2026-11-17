@@ -1,14 +1,17 @@
 import { createHash } from 'crypto'
 import os from 'os'
 import path from 'path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveToolOffloadPath } from '@/agent/shared/storage/sessionPaths'
 
 describe('sessionPaths offload path sanitization', () => {
-  const homeDir = path.join('/Users', 'tester')
+  beforeEach(() => vi.stubEnv('SEMAPATH_REPLICA_HOME', ''))
+
+  const homeDir = path.resolve('/Users', 'tester')
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('sanitizes colon-based tool call ids into a normal .offload file name', () => {
@@ -21,7 +24,7 @@ describe('sessionPaths offload path sanitization', () => {
     expect(filePath).toBe(
       path.join(
         homeDir,
-        '.deepchat',
+        '.semapath-replica',
         'sessions',
         'session-a',
         `tool_function.cdp_send_11_${fingerprint}.offload`

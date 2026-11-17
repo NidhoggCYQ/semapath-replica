@@ -180,7 +180,7 @@ export class TabPresenter implements ITabPresenter {
     }
 
     // 开发模式下自动打开 DevTools
-    if (is.dev) {
+    if (is.dev && process.env.SEMAPATH_DEVTOOLS === '1') {
       view.webContents.openDevTools({ mode: 'detach' })
     }
 

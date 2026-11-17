@@ -1,4 +1,6 @@
 import type { z } from 'zod'
+import { analysisTaskChangedEvent } from './events/analysis.events'
+export * from './events/analysis.events'
 import type { EventContract } from './common'
 import { acpAuthOutputEvent, acpAuthStateChangedEvent } from './events/acp-auth.events'
 import { approvalClosedEvent, approvalRequestedEvent } from './events/approvals.events'
@@ -176,6 +178,7 @@ export * from './events/window.events'
 export * from './events/workspace.events'
 
 export const DEEPCHAT_EVENT_CATALOG = {
+  [analysisTaskChangedEvent.name]: analysisTaskChangedEvent,
   [approvalRequestedEvent.name]: approvalRequestedEvent,
   [approvalClosedEvent.name]: approvalClosedEvent,
   [windowStateChangedEvent.name]: windowStateChangedEvent,

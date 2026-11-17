@@ -258,6 +258,25 @@ export interface AgentToolPermissionPort {
 }
 
 export interface AgentToolDependencies {
+  analysis?: {
+    readonly fileExecution?: import('@shared/analysisFileExecution').FileExecutionPort
+    definitions(sessionId?: string): Promise<MCPToolDefinition[]>
+    has(name: string): boolean
+    call(
+      name: string,
+      args: Record<string, unknown>,
+      sessionId: string | undefined,
+      options: {
+        toolCallId?: string
+        messageId?: string
+        signal?: AbortSignal
+        beforeDispatch?: (args: Record<string, unknown>) => unknown
+      }
+    ): Promise<{
+      content: string
+      rawData?: { content?: string; isError?: boolean; toolResult?: unknown }
+    }>
+  }
   sessions: AgentToolSessionPort
   tape: AgentTapeToolPort
   memory: AgentMemoryToolPort

@@ -1,4 +1,6 @@
 import type { z } from 'zod'
+import { ANALYSIS_ROUTE_CATALOG } from './routes/analysis.routes'
+export * from './routes/analysis.routes'
 import type { RouteContract } from './common'
 import { approvalsResolveRoute } from './routes/approvals.routes'
 import {
@@ -514,6 +516,9 @@ import {
   sessionsSteerPendingInputRoute,
   sessionsTogglePinnedRoute,
   sessionsTranslateTextRoute,
+  sessionsGetComposerPredictionRoute,
+  sessionsGetMessageDeliveryTraceRoute,
+  sessionsRecordMessageDeliveryRoute,
   sessionsUpdateDisabledAgentToolsRoute,
   sessionsUpdateGenerationSettingsRoute,
   sessionsUpdateQueuedInputRoute
@@ -687,6 +692,7 @@ export * from './routes/orchestration.routes'
 // TS 的类型序列化上限触发 TS7056。拆成多块后每块单独序列化，合并类型只保存引用，
 // 既绕过上限又保留逐路由精确的输入/输出类型。新增路由追加到任意一块即可，保持各块体量适中。
 const DEEPCHAT_ROUTE_CATALOG_PART_1 = {
+  ...ANALYSIS_ROUTE_CATALOG,
   [approvalsResolveRoute.name]: approvalsResolveRoute,
   [acpAuthInspectRoute.name]: acpAuthInspectRoute,
   [acpAuthStartRoute.name]: acpAuthStartRoute,
@@ -976,6 +982,9 @@ const DEEPCHAT_ROUTE_CATALOG_PART_4 = {
   [sessionsListMessageTracesRoute.name]: sessionsListMessageTracesRoute,
   [sessionsExportMessageTapeReplaySliceRoute.name]: sessionsExportMessageTapeReplaySliceRoute,
   [sessionsTranslateTextRoute.name]: sessionsTranslateTextRoute,
+  [sessionsGetComposerPredictionRoute.name]: sessionsGetComposerPredictionRoute,
+  [sessionsGetMessageDeliveryTraceRoute.name]: sessionsGetMessageDeliveryTraceRoute,
+  [sessionsRecordMessageDeliveryRoute.name]: sessionsRecordMessageDeliveryRoute,
   [sessionsGetAgentsRoute.name]: sessionsGetAgentsRoute,
   [sessionsGetUsageDashboardRoute.name]: sessionsGetUsageDashboardRoute,
   [sessionsRetryRtkHealthCheckRoute.name]: sessionsRetryRtkHealthCheckRoute,

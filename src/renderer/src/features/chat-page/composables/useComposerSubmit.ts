@@ -431,7 +431,11 @@ export function useComposerSubmit(options: UseComposerSubmitOptions) {
     seed: ComposerSubmissionSeed
   ): SendMessageInput => {
     const activeSkills = seed.draft.activeSkills
-    const inlineItems = seed.inlineItems
+    const leading = seed.draft.rawMessage.length - seed.draft.rawMessage.trimStart().length
+    const inlineItems = seed.inlineItems.map((item) => ({
+      ...item,
+      offset: Math.min(text.length, Math.max(0, item.offset - leading))
+    }))
     return {
       text,
       files: copyComposerFiles(files),
@@ -518,10 +522,7 @@ export function useComposerSubmit(options: UseComposerSubmitOptions) {
    * bumps revisions or fingerprints, so a debounced background timer cannot perturb draft tracking.
    */
   function captureDraftForPersistence(sessionId: string): ComposerSessionDraft {
-    const deferredDraft =
-      !chatInputRef.value && pendingHandleRestoreSessionId === sessionId
-        ? sessionDrafts.get(sessionId)
-        : undefined
+    const deferredDraft = !chatInputRef.value ? sessionDrafts.get(sessionId) : undefined
     return {
       revision: draftRevisions.get(sessionId) ?? 0,
       rawMessage: message.value,
@@ -573,10 +574,7 @@ export function useComposerSubmit(options: UseComposerSubmitOptions) {
 
   function captureLiveDraft(sessionId: string): ComposerSessionDraft {
     let revision = draftRevisions.get(sessionId) ?? 0
-    const deferredDraft =
-      !chatInputRef.value && pendingHandleRestoreSessionId === sessionId
-        ? sessionDrafts.get(sessionId)
-        : undefined
+    const deferredDraft = !chatInputRef.value ? sessionDrafts.get(sessionId) : undefined
     const draft: ComposerSessionDraft = {
       revision,
       rawMessage: message.value,
@@ -621,6 +619,7 @@ export function useComposerSubmit(options: UseComposerSubmitOptions) {
     observedSkillSelections.set(sessionId, [...copiedDraft.activeSkills])
     observedDraftFingerprints.set(sessionId, composerDraftFingerprint(copiedDraft))
     sessionDrafts.set(sessionId, copyComposerDraft(copiedDraft))
+    saveComposerDraftToStorage(sessionId, copiedDraft)
     message.value = copiedDraft.rawMessage
     attachedFiles.value = copyComposerFiles(copiedDraft.files)
     const inputHandle = chatInputRef.value
@@ -654,6 +653,17 @@ export function useComposerSubmit(options: UseComposerSubmitOptions) {
 
   function recordComposerDocumentChange(): void {
     markCurrentDraftChanged()
+    if (activeDraftSessionId && chatInputRef.value) {
+      const previous = sessionDrafts.get(activeDraftSessionId)
+      const draft = captureDraftForPersistence(activeDraftSessionId)
+      sessionDrafts.set(activeDraftSessionId, draft)
+      // App shutdown can destroy the window without a beforeunload event. Reference-bearing
+      // drafts (including removal of the final reference) must survive an immediate close.
+      const hasReference = (node: JSONContent | undefined): boolean =>
+        !!node && (node.type === 'analysisContext' || !!node.content?.some(hasReference))
+      if (hasReference(draft.document) || hasReference(previous?.document))
+        saveComposerDraftToStorage(activeDraftSessionId, draft)
+    }
   }
 
   function recordComposerSkillsChange(skills: string[]): void {
@@ -931,11 +941,19 @@ export function useComposerSubmit(options: UseComposerSubmitOptions) {
             : '[ChatPage] steer message failed:',
           error
         )
+        const errorCode = error instanceof Error ? error.message : String(error)
+        const referenceError = [
+          'ANALYSIS_REFERENCE_STALE',
+          'ANALYSIS_REFERENCE_UNAVAILABLE',
+          'ANALYSIS_CONTEXT_NOT_FOUND',
+          'ANALYSIS_QUOTE_INVALID',
+          'ANALYSIS_CONTEXT_LIMIT'
+        ].includes(errorCode)
         notify({
           kind: 'error',
-          code: 'chat.attachment.uploadFailed',
-          title: t('chat.input.fileUploadFailed'),
-          description: error instanceof Error ? error.message : String(error)
+          code: referenceError ? 'analysis.interaction.failed' : 'chat.attachment.uploadFailed',
+          title: t(referenceError ? 'analysis.references.failed' : 'chat.input.fileUploadFailed'),
+          description: referenceError ? t('analysis.errors.' + errorCode) : errorCode
         })
       }
       return false

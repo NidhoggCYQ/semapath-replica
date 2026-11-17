@@ -68,6 +68,85 @@ describe('AgentBashHandler', () => {
     vi.restoreAllMocks()
   })
 
+  it('keeps captured table computations attached and returns an authoritative exit status', async () => {
+    const handler = new AgentBashHandler(
+      [workspaceRoot],
+      { get: () => undefined },
+      createPermissionService()
+    )
+    vi.spyOn(handler as never, 'prepareCommand' as never).mockResolvedValue({
+      originalCommand: 'calculate',
+      command: 'calculate',
+      env: {},
+      rewritten: false,
+      rtkApplied: false,
+      rtkMode: 'bypass'
+    })
+    vi.spyOn(backgroundExecSessionManager, 'start').mockResolvedValue({
+      sessionId: 'captured',
+      status: 'running'
+    })
+    vi.spyOn(backgroundExecSessionManager, 'write').mockResolvedValue(undefined)
+    vi.spyOn(backgroundExecSessionManager, 'remove').mockResolvedValue(undefined)
+    const completion = vi
+      .spyOn(backgroundExecSessionManager, 'getCompletionResult')
+      .mockResolvedValue({
+        status: 'done',
+        output: 'complete',
+        exitCode: 0,
+        timedOut: false,
+        offloaded: false
+      })
+    const yieldCall = vi.spyOn(backgroundExecSessionManager, 'waitForCompletionOrYield')
+    const result = await handler.executeCommand(
+      { command: 'calculate', description: 'Captured computation' },
+      { commandShell: POSIX_COMMAND_SHELL, conversationId: 'conv-1', awaitCompletion: true }
+    )
+    expect(completion).toHaveBeenCalled()
+    expect(yieldCall).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ exitCode: 0, timedOut: false })
+  })
+
+  it('terminates attached non-Programmatic computations when their owning turn is cancelled', async () => {
+    const handler = new AgentBashHandler(
+      [workspaceRoot],
+      { get: () => undefined },
+      createPermissionService()
+    )
+    vi.spyOn(handler as never, 'prepareCommand' as never).mockResolvedValue({
+      originalCommand: 'calculate',
+      command: 'calculate',
+      env: {},
+      rewritten: false,
+      rtkApplied: false,
+      rtkMode: 'bypass'
+    })
+    vi.spyOn(backgroundExecSessionManager, 'start').mockResolvedValue({
+      sessionId: 'cancel-captured',
+      status: 'running'
+    })
+    vi.spyOn(backgroundExecSessionManager, 'write').mockResolvedValue(undefined)
+    const remove = vi.spyOn(backgroundExecSessionManager, 'remove').mockResolvedValue(undefined)
+    vi.spyOn(backgroundExecSessionManager, 'getCompletionResult').mockImplementation(
+      () => new Promise(() => {})
+    )
+    const controller = new AbortController()
+    const pending = handler.executeCommand(
+      { command: 'calculate', description: 'Captured computation' },
+      {
+        commandShell: POSIX_COMMAND_SHELL,
+        conversationId: 'conv-1',
+        awaitCompletion: true,
+        signal: controller.signal
+      }
+    )
+    const assertion = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    await Promise.resolve()
+    controller.abort()
+    await assertion
+    expect(remove).toHaveBeenCalledWith('conv-1', 'cancel-captured')
+  })
+
   it('falls back to the original command after an RTK capability error', async () => {
     const originalCommand = 'find . -type f -name "*.ts" -o -name "*.vue" | grep "^./src"'
     const handler = new AgentBashHandler(

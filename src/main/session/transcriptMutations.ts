@@ -25,6 +25,13 @@ export interface SessionTranscriptMutationDependencies {
   pendingInputs: SessionPendingInputs
   runtime: SessionTranscriptRuntimePort
   runInTransaction<T>(operation: () => T): T
+  validateInput?: (sessionId: string, input: SendMessageInput) => Promise<void>
+  forkAnalysis?: (
+    sourceSessionId: string,
+    targetSessionId: string,
+    targetMessageId: string,
+    messageIds: Map<string, string>
+  ) => void
 }
 
 export class SessionTranscriptMutations {
@@ -110,7 +117,8 @@ export class SessionTranscriptMutations {
   async editUserMessage(
     sessionId: string,
     messageId: string,
-    text: string
+    text: string,
+    inlineItems?: SendMessageInput['inlineItems']
   ): Promise<ChatMessageRecord> {
     this.dependencies.runtime.assertNoActivePendingInputs(sessionId)
     const target = this.requireMessage(sessionId, messageId)
@@ -119,12 +127,19 @@ export class SessionTranscriptMutations {
     const nextText = text.trim()
     if (!nextText) throw new Error('Edited message cannot be empty.')
 
+    const nextInput = extractUserMessageInput(
+      buildEditedUserContent(target.content, nextText, inlineItems)
+    )
+    await this.dependencies.validateInput?.(sessionId, nextInput)
+    const nextContent = buildEditedUserContent(target.content, nextText, nextInput.inlineItems)
     await this.dependencies.runtime.cancelForTranscriptMutation(sessionId)
     this.dependencies.runtime.invalidateTranscriptFrom(sessionId, target.orderSeq)
-    this.dependencies.transcript.updateMessageContent(
-      messageId,
-      buildEditedUserContent(target.content, nextText)
-    )
+    this.dependencies.runInTransaction(() => {
+      this.dependencies.transcript.updateMessageContent(messageId, nextContent)
+      // Replies to the previous prompt are no longer replies to the edited prompt.
+      this.dependencies.transcript.deleteFromOrderSeq(sessionId, target.orderSeq + 1)
+    })
+    this.dependencies.runtime.finishTranscriptTruncate(sessionId)
 
     const updated = this.dependencies.transcript.getMessage(messageId)
     if (!updated) throw new Error(`Message ${messageId} not found after edit`)
@@ -137,11 +152,22 @@ export class SessionTranscriptMutations {
     targetMessageId: string
   ): Promise<void> {
     const target = this.requireMessage(sourceSessionId, targetMessageId)
-    this.dependencies.transcript.cloneSentMessagesToSession(
-      sourceSessionId,
-      targetSessionId,
-      target.orderSeq
-    )
+    if (target.status !== 'sent') throw new Error('Cannot branch an incomplete message.')
+    this.dependencies.runInTransaction(() => {
+      const messageIds = new Map<string, string>()
+      this.dependencies.transcript.cloneSentMessagesToSession(
+        sourceSessionId,
+        targetSessionId,
+        target.orderSeq,
+        (source, id) => messageIds.set(source.id, id)
+      )
+      this.dependencies.forkAnalysis?.(
+        sourceSessionId,
+        targetSessionId,
+        targetMessageId,
+        messageIds
+      )
+    })
     this.dependencies.runtime.resetForkTarget(targetSessionId)
   }
 

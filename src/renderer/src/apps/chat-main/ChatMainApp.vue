@@ -157,6 +157,8 @@ const ensureStartupWelcomeState = async () => {
     await router.isReady()
 
     const currentRoute = router.currentRoute.value
+    // Local Excel analysis does not require provider onboarding.
+    if (currentRoute.name === 'analysis') return
     const isWelcomeRoute = currentRoute.name === 'welcome' || currentRoute.path === '/welcome'
 
     if (isDevWelcomeOverrideEnabled()) {

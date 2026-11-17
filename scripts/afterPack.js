@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs'
 import fs from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { parse as parseYaml } from 'yaml'
 import { fileURLToPath } from 'node:url'
 import { gzip } from 'node:zlib'
 import { promisify } from 'node:util'
@@ -130,16 +131,27 @@ async function resolveInstalledPackageDir(projectDir, packageName, expectedVersi
     path.join(projectDir, 'node_modules', '.pnpm', 'node_modules', ...packagePathParts)
   ]
 
-  const pnpmVirtualStoreDir = path.join(projectDir, 'node_modules', '.pnpm')
+  const virtualStoreDirs = new Set([path.join(projectDir, 'node_modules', '.pnpm')])
   try {
-    const virtualStoreEntries = await fs.readdir(pnpmVirtualStoreDir, { withFileTypes: true })
-    for (const entry of virtualStoreEntries) {
-      if (entry.isDirectory()) {
-        candidates.push(path.join(pnpmVirtualStoreDir, entry.name, 'node_modules', ...packagePathParts))
-      }
-    }
+    const modules = parseYaml(
+      await fs.readFile(path.join(projectDir, 'node_modules', '.modules.yaml'), 'utf8')
+    )
+    if (typeof modules?.virtualStoreDir === 'string')
+      virtualStoreDirs.add(path.resolve(projectDir, 'node_modules', modules.virtualStoreDir))
   } catch {
-    // Non-pnpm installs only need the direct node_modules candidates above.
+    // Non-pnpm installs do not have a modules manifest.
+  }
+  for (const pnpmVirtualStoreDir of virtualStoreDirs) {
+    try {
+      const virtualStoreEntries = await fs.readdir(pnpmVirtualStoreDir, { withFileTypes: true })
+      for (const entry of virtualStoreEntries) {
+        if (entry.isDirectory()) {
+          candidates.push(path.join(pnpmVirtualStoreDir, entry.name, 'node_modules', ...packagePathParts))
+        }
+      }
+    } catch {
+      // The default store may be absent when pnpm uses an external virtual-store-dir.
+    }
   }
 
   for (const candidate of candidates) {

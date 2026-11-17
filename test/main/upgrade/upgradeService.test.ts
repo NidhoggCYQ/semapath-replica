@@ -63,6 +63,13 @@ vi.mock('electron-updater', () => ({
   }
 }))
 
+// The inherited updater engine is exercised with a hypothetical future own feed.
+// The shipped replica policy is covered separately by productIsolation.test.ts.
+vi.mock('@shared/productIdentity', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../src/shared/productIdentity')>()),
+  PRODUCT_UPDATES_ENABLED: true
+}))
+
 vi.unmock('fs')
 
 import electronUpdater from 'electron-updater'

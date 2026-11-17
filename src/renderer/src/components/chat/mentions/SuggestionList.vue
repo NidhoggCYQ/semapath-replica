@@ -4,6 +4,9 @@
       <button
         v-for="(item, index) in filteredItems"
         :key="item.id"
+        :data-testid="item.category === 'data' ? 'analysis-reference-option' : undefined"
+        :data-kind="item.category === 'data' ? (item.payload as any)?.kind : undefined"
+        :disabled="item.category === 'status' && item.payload !== 'retry'"
         :ref="(el) => (itemElements[index] = el as HTMLButtonElement)"
         class="w-full rounded-sm px-2 py-1.5 text-left text-sm transition-colors hover:bg-accent"
         :class="index === selectedIndex ? 'bg-accent text-accent-foreground' : ''"
@@ -30,15 +33,26 @@
         </div>
       </button>
     </div>
-    <div v-else class="px-3 py-2 text-sm text-muted-foreground">No result</div>
+    <div v-else class="px-3 py-2 text-sm text-muted-foreground">
+      {{ t('analysis.references.empty') }}
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Icon } from '@iconify/vue'
+import { useI18n } from 'vue-i18n'
+const { t } = useI18n()
 
-export type SuggestionCategory = 'file' | 'command' | 'skill' | 'prompt' | 'tool'
+export type SuggestionCategory =
+  | 'file'
+  | 'command'
+  | 'skill'
+  | 'prompt'
+  | 'tool'
+  | 'data'
+  | 'status'
 
 export interface SuggestionListItem {
   id: string
@@ -88,6 +102,7 @@ const categoryTag = (category: SuggestionCategory) => {
     case 'tool':
       return 'TL'
     case 'file':
+    case 'data':
       return '@'
     default:
       return ''
@@ -96,23 +111,30 @@ const categoryTag = (category: SuggestionCategory) => {
 
 const selectIndex = (index: number) => {
   const item = filteredItems.value[index]
-  if (!item) return
+  if (!item || (item.category === 'status' && item.payload !== 'retry')) return
   props.command(item)
 }
 
 const onKeyDown = ({ event }: { event: KeyboardEvent }): boolean => {
+  const move = (direction: number) => {
+    const count = filteredItems.value.length
+    for (let step = 0; step < count; step++) {
+      selectedIndex.value = (selectedIndex.value + direction + count) % count
+      const item = filteredItems.value[selectedIndex.value]
+      if (item.category !== 'status' || item.payload === 'retry') break
+    }
+  }
   if (event.key === 'ArrowUp') {
     event.preventDefault()
     if (!filteredItems.value.length) return true
-    selectedIndex.value =
-      (selectedIndex.value + filteredItems.value.length - 1) % filteredItems.value.length
+    move(-1)
     return true
   }
 
   if (event.key === 'ArrowDown') {
     event.preventDefault()
     if (!filteredItems.value.length) return true
-    selectedIndex.value = (selectedIndex.value + 1) % filteredItems.value.length
+    move(1)
     return true
   }
 

@@ -349,6 +349,12 @@ export const MessageFileSchema = z.object({
 
 export const UserMessageInlineItemSchema = z.discriminatedUnion('type', [
   z.object({
+    type: z.literal('analysis'),
+    offset: z.number().int().nonnegative(),
+    contextId: z.string().uuid(),
+    label: z.string().min(1).max(2000)
+  }),
+  z.object({
     type: z.literal('skill'),
     offset: z.number().int().nonnegative(),
     skillName: z.string()

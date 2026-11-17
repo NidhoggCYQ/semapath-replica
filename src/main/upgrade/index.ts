@@ -1,3 +1,5 @@
+// SemaPath Replica modification: upstream releases must never replace this app.
+import { PRODUCT_UPDATES_ENABLED } from '@shared/productIdentity'
 import logger from '@shared/logger'
 import { app, shell } from 'electron'
 import type { DeepchatEventPublisher } from '@shared/contracts/events'
@@ -178,6 +180,12 @@ export class UpgradeService {
   ) {
     this.requestUpdateInstall = requestUpdateInstall
     this._updateMarkerPath = getUpdateMarkerFilePath()
+
+    if (!PRODUCT_UPDATES_ENABLED) {
+      autoUpdater.autoDownload = false
+      autoUpdater.autoInstallOnAppQuit = false
+      return
+    }
 
     // 配置自动更新
     autoUpdater.autoDownload = false // 默认不自动下载，由我们手动控制
@@ -427,7 +435,7 @@ export class UpgradeService {
 
   // 处理应用获得焦点事件
   handleAppFocus(): void {
-    if (this.isPrivacyModeEnabled()) {
+    if (!PRODUCT_UPDATES_ENABLED || this.isPrivacyModeEnabled()) {
       return
     }
 
@@ -446,6 +454,10 @@ export class UpgradeService {
    * @returns
    */
   async checkUpdate(type?: string): Promise<void> {
+    if (!PRODUCT_UPDATES_ENABLED) {
+      this.emitStatusChanged({ status: 'not-available', type })
+      return
+    }
     if (this._lock) {
       return
     }
@@ -500,6 +512,7 @@ export class UpgradeService {
   }
 
   async goDownloadUpgrade(type: 'github' | 'official'): Promise<void> {
+    if (!PRODUCT_UPDATES_ENABLED) return
     const githubFallbackUrl = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`
     if (type === 'github') {
       const url = this._versionInfo?.githubUrl || githubFallbackUrl
@@ -516,6 +529,7 @@ export class UpgradeService {
 
   // 开始下载更新（如果手动触发）
   startDownloadUpdate(): boolean {
+    if (!PRODUCT_UPDATES_ENABLED) return false
     if (this._status !== 'available') {
       return false
     }
@@ -644,6 +658,7 @@ export class UpgradeService {
 
   // 重启并更新
   restartToUpdate(): boolean {
+    if (!PRODUCT_UPDATES_ENABLED) return false
     logger.info('重启并更新')
     if (this._status !== 'downloaded') {
       this.emitError('更新尚未下载完成')

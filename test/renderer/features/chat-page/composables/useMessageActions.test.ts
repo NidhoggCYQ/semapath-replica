@@ -85,6 +85,18 @@ function createHarness() {
 }
 
 describe('useMessageActions', () => {
+  it('keeps the edit open after a native validation failure and acknowledges successful saves', async () => {
+    const h = createHarness(),
+      settled = vi.fn()
+    h.sessionClient.editUserMessage.mockRejectedValueOnce(new Error('ANALYSIS_REFERENCE_STALE'))
+    await h.actions.onMessageEditSave({ messageId: 'u', text: '新问题', onSettled: settled })
+    expect(settled).toHaveBeenLastCalledWith(false)
+    expect(h.sessionClient.retryMessage).not.toHaveBeenCalled()
+    await h.actions.onMessageEditSave({ messageId: 'u', text: '新问题', onSettled: settled })
+    expect(settled).toHaveBeenLastCalledWith(true)
+    expect(h.sessionClient.retryMessage).toHaveBeenCalledWith('s1', 'u')
+    h.stop()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
   })

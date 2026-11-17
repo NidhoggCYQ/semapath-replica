@@ -364,7 +364,12 @@ export interface SessionTurnPort {
     options?: { attachmentFallbackPolicy?: AttachmentFallbackPolicy }
   ): Promise<MessageStartResult>
   deleteMessage(sessionId: string, messageId: string): Promise<void>
-  editUserMessage(sessionId: string, messageId: string, text: string): Promise<ChatMessageRecord>
+  editUserMessage(
+    sessionId: string,
+    messageId: string,
+    text: string,
+    inlineItems?: SendMessageInput['inlineItems']
+  ): Promise<ChatMessageRecord>
   getSessionCompactionSnapshot(sessionId: string): Promise<SessionCompactionSnapshot>
   getSessionContextOccupancy(sessionId: string): Promise<SessionContextOccupancySnapshot>
   compactSession(sessionId: string): Promise<{ compacted: boolean; state: SessionCompactionState }>

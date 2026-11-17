@@ -50,6 +50,7 @@
 </template>
 
 <script setup lang="ts">
+import type { MessageEditPayload } from '@/features/chat-page/model/displayMessage'
 import { computed, onMounted, ref, unref, watch } from 'vue'
 import MessageBlockAction from '@/components/message/MessageBlockAction.vue'
 import { useMessageCapture } from '@/composables/message/useMessageCapture'
@@ -98,7 +99,7 @@ const emit = defineEmits<{
   continue: [conversationId: string, messageId: string]
   trace: [messageId: string]
   tapeInspector: [messageId: string]
-  editSave: [payload: { messageId: string; text: string }]
+  editSave: [payload: MessageEditPayload]
   measure: [payload: { messageId: string; height: number }]
 }>()
 
@@ -167,7 +168,7 @@ const onContinue = (conversationId: string, messageId: string) =>
   emit('continue', conversationId, messageId)
 const onTrace = (messageId: string) => emit('trace', messageId)
 const onTapeInspector = (messageId: string) => emit('tapeInspector', messageId)
-const onEditSave = (payload: { messageId: string; text: string }) => emit('editSave', payload)
+const onEditSave = (payload: MessageEditPayload) => emit('editSave', payload)
 const onMeasure = (payload: { messageId: string; height: number }) => emit('measure', payload)
 
 const resolveVisibleCaptureParentId = (

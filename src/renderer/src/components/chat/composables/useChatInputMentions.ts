@@ -1,4 +1,7 @@
-import { computed, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
+import { computed, inject, onMounted, onUnmounted, ref, watch, type Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ANALYSIS_INTERACTION_SCOPE } from '@/components/analysis/interactionContext'
+import type { DataReference } from '@shared/analysisInteraction'
 import { VueRenderer } from '@tiptap/vue-3'
 import type { Editor, Range } from '@tiptap/core'
 import tippy from 'tippy.js'
@@ -45,7 +48,25 @@ interface FileSuggestionItem {
   payload: { path: string; insertText: string }
 }
 
-type SuggestionItem = FileSuggestionItem | SlashSuggestionItem
+type DataSuggestionItem = {
+  id: string
+  category: 'data'
+  label: string
+  description: string
+  payload: DataReference
+}
+type StatusSuggestionItem = {
+  id: string
+  category: 'status'
+  label: string
+  description?: string
+  payload: 'loading' | 'retry' | 'more'
+}
+type SuggestionItem =
+  | FileSuggestionItem
+  | SlashSuggestionItem
+  | DataSuggestionItem
+  | StatusSuggestionItem
 
 const normalizeAcpCommands = (commands: unknown): AcpSessionCommand[] => {
   if (!Array.isArray(commands)) {
@@ -75,6 +96,12 @@ const normalizeAcpCommands = (commands: unknown): AcpSessionCommand[] => {
 }
 
 export function useChatInputMentions(options: UseChatInputMentionsOptions) {
+  const scope = inject(ANALYSIS_INTERACTION_SCOPE, null)
+  const { t } = useI18n()
+  let atRenderer: VueRenderer | null = null
+  let atSequence = 0
+  let atQuery = ''
+  let atItems: SuggestionItem[] = []
   const workspaceClient = createWorkspaceClient()
   const sessionClient = createSessionClient()
   const mcpStore = useMcpStore()
@@ -380,7 +407,7 @@ export function useChatInputMentions(options: UseChatInputMentionsOptions) {
     return filterSlashSuggestionItems(slashItems.value, query)
   }
 
-  const createRenderer = () => {
+  const createRenderer = (isAt = false) => {
     let component: VueRenderer | null = null
     let popup: ReturnType<typeof tippy> | null = null
 
@@ -395,6 +422,10 @@ export function useChatInputMentions(options: UseChatInputMentionsOptions) {
             command: (item: SuggestionItem) => props.command(item)
           }
         })
+        if (isAt) {
+          atRenderer = component
+          component.updateProps({ items: atItems })
+        }
 
         if (!props.clientRect) {
           return
@@ -413,7 +444,7 @@ export function useChatInputMentions(options: UseChatInputMentionsOptions) {
       },
       onUpdate: (props: any) => {
         component?.updateProps({
-          items: props.items,
+          items: isAt ? atItems : props.items,
           query: props.query,
           command: (item: SuggestionItem) => props.command(item)
         })
@@ -437,6 +468,10 @@ export function useChatInputMentions(options: UseChatInputMentionsOptions) {
         return component?.ref?.onKeyDown(props) ?? false
       },
       onExit: () => {
+        if (isAt) {
+          atRenderer = null
+          ++atSequence
+        }
         isSuggestionMenuOpen.value = false
         popup?.[0]?.destroy()
         popup = null
@@ -446,25 +481,123 @@ export function useChatInputMentions(options: UseChatInputMentionsOptions) {
     }
   }
 
+  function searchAt(query: string): SuggestionItem[] {
+    const sequence = ++atSequence
+    const session = options.sessionId.value
+    const task = scope?.taskId.value
+    atQuery = query
+    atItems = [
+      {
+        id: 'loading',
+        category: 'status',
+        label: t('analysis.references.loading'),
+        payload: 'loading'
+      }
+    ]
+    atRenderer?.updateProps({ items: atItems })
+    void Promise.allSettled([
+      searchWorkspaceFiles(query),
+      scope && task && !options.isAcpSession.value ? scope.catalog(query) : Promise.resolve(null)
+    ]).then(([files, data]) => {
+      if (
+        sequence !== atSequence ||
+        session !== options.sessionId.value ||
+        task !== scope?.taskId.value
+      )
+        return
+      const result: SuggestionItem[] = []
+      if (data.status === 'fulfilled' && data.value) {
+        result.push(
+          ...data.value.items.map(
+            (reference): DataSuggestionItem => ({
+              id: reference.id,
+              category: 'data',
+              label: reference.label,
+              description:
+                t('analysis.references.kinds.' + reference.kind) + ' · ' + reference.description,
+              payload: reference
+            })
+          )
+        )
+        if (data.value.issues.length)
+          result.push({
+            id: 'retry',
+            category: 'status',
+            label: t('analysis.references.retry'),
+            description: t('analysis.references.partial'),
+            payload: 'retry'
+          })
+        if (data.value.hasMore)
+          result.push({
+            id: 'more',
+            category: 'status',
+            label: t('analysis.references.more'),
+            payload: 'more'
+          })
+      } else if (data.status === 'rejected') {
+        result.push({
+          id: 'retry',
+          category: 'status',
+          label: t('analysis.references.retry'),
+          description: t('analysis.references.unavailable'),
+          payload: 'retry'
+        })
+      }
+      if (files.status === 'fulfilled') result.push(...files.value)
+      atItems = result
+      atRenderer?.updateProps({ items: atItems })
+    })
+    return atItems
+  }
+
   const atSuggestion = {
     char: '@',
     allowedPrefixes: null,
-    items: async ({ query }: { query: string }) => {
-      return await searchWorkspaceFiles(query)
-    },
-    command: ({
+    items: ({ query }: { query: string }) => searchAt(query),
+    command: async ({
       editor,
       range,
       props
     }: {
       editor: Editor
       range: Range
-      props: FileSuggestionItem
+      props: SuggestionItem
     }) => {
+      if (props.category === 'status') {
+        if (props.payload === 'retry') searchAt(atQuery)
+        return
+      }
       markSuggestionSelected()
-      editor.chain().focus().insertContentAt(range, props.payload.insertText).run()
+      if (props.category === 'file') {
+        editor.chain().focus().insertContentAt(range, props.payload.insertText).run()
+      } else if (props.category === 'data' && scope) {
+        const session = options.sessionId.value
+        const document = editor.state.doc
+        try {
+          const context = await scope.reference(props.payload)
+          if (
+            editor.isDestroyed ||
+            session !== options.sessionId.value ||
+            !editor.state.doc.eq(document)
+          )
+            return
+          editor
+            .chain()
+            .focus()
+            .insertContentAt(range, [
+              {
+                type: 'analysisContext',
+                attrs: { contextId: context.id, label: context.label, kind: context.kind }
+              },
+              { type: 'text', text: ' ' }
+            ])
+            .run()
+        } catch (error) {
+          scope.reportError(error)
+        }
+      }
     },
-    render: createRenderer
+    render: () => createRenderer(true)
   }
 
   const slashSuggestion = {
@@ -483,7 +616,7 @@ export function useChatInputMentions(options: UseChatInputMentionsOptions) {
       markSuggestionSelected()
       void handleSlashSelection(editor, range, props)
     },
-    render: createRenderer
+    render: () => createRenderer()
   }
 
   const handleAcpCommandsReady = (payload?: Record<string, unknown>) => {

@@ -224,6 +224,12 @@ export interface SessionAgentContextUpdate {
 
 export type UserMessageInlineItem =
   | {
+      type: 'analysis'
+      offset: number
+      contextId: string
+      label: string
+    }
+  | {
       type: 'skill'
       offset: number
       skillName: string

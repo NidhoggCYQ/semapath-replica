@@ -49,7 +49,9 @@ export function getVisibleUserContentBlocks(
       blocks.push({ type: 'text', content: text.slice(cursor, item.offset) })
     }
 
-    if (item.type === 'skill') {
+    if (item.type === 'analysis') {
+      blocks.push({ type: 'analysis', contextId: item.contextId, label: item.label })
+    } else if (item.type === 'skill') {
       blocks.push({ type: 'skill', skillName: item.skillName })
     } else {
       blocks.push({
@@ -79,6 +81,7 @@ export function collectVisibleUserMessageText(content: DisplayUserMessageContent
 
   return blocks
     .map((block) => {
+      if (block.type === 'analysis') return block.label
       if (block.type === 'mention') {
         return getVisibleMentionLabel(block)
       }

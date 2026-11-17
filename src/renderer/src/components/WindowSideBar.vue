@@ -7,6 +7,25 @@
     >
       <!-- Left Column: Agent Icons (48px) -->
       <div class="window-no-drag-region flex flex-col items-center shrink-0 pt-2 pb-2 gap-1 w-12">
+        <DcButton
+          data-testid="sidebar-analysis-button"
+          size="icon"
+          icon="lucide:chart-no-axes-combined"
+          icon-size="4"
+          tooltip-side="right"
+          :tooltip="t('analysis.title')"
+          :title="t('analysis.title')"
+          class="w-9 h-9 rounded-xl"
+          @click="
+            router.push({
+              name: 'analysis',
+              query:
+                router.currentRoute.value.name === 'chat' && sessionStore.activeSessionId
+                  ? { session: sessionStore.activeSessionId }
+                  : {}
+            })
+          "
+        />
         <!-- All agents button -->
         <DcButton
           data-testid="sidebar-agent-all-button"
@@ -799,7 +818,9 @@ const themeModeLabel = computed(() => {
   }
 })
 
-const collapsed = computed(() => sidebarStore.collapsed)
+const collapsed = computed(
+  () => sidebarStore.collapsed || router.currentRoute.value.name === 'analysis'
+)
 const sessionSearchQuery = ref('')
 const pluginsRouteActive = computed(() =>
   String(router?.currentRoute?.value?.name ?? '').startsWith('plugins')

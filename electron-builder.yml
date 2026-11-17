@@ -1,8 +1,12 @@
-appId: com.wefonk.deepchat
-productName: DeepChat
+appId: com.semapath.replica.dev
+productName: SemaPath Replica
 directories:
   buildResources: build
 files:
+  - 'out/**/*'
+  - 'resources/**/*'
+  - 'package.json'
+  - '!.impeccable/**'
   - '!**/.claude/*'
   - '!**/.github/*'
   - '!**/.cursor/*'
@@ -10,6 +14,8 @@ files:
   - '!src/*'
   - '!test/*'
   - '!vendor/**'
+  - '!native/**'
+  - '!out/powerbi-bridge/**'
   - '!docs/*'
   - '!plugins/**'
   - '!out/main/lightOcrHelper.js'
@@ -25,7 +31,7 @@ files:
   - '!test/*'
   - '!*.config.ts'
   - '!*.config.js'
-  - '!**/{LICENSE,LICENSE.txt,*.LICENSE.txt,NOTICE.txt,README.md,CHANGELOG.md,CONTRIBUTING.md,CONTRIBUTING.zh.md,README.zh.md,README.jp.md}'
+  - '!**/{README.md,CHANGELOG.md,CONTRIBUTING.md,CONTRIBUTING.zh.md,README.zh.md,README.jp.md}'
   - '!**/{.DS_Store,Thumbs.db}'
   - '!*.md'
 
@@ -43,6 +49,13 @@ asarUnpack:
   - '**/node_modules/@arcships/light-ocr*/**/*'
   - '**/node_modules/@zerob13/nativekit/prebuilds/**/*'
 extraResources:
+  - from: ./out/powerbi-bridge/
+    to: powerbi-bridge
+    filter: ['**/*']
+  - from: ./LICENSE
+    to: licenses/deepchat-LICENSE.txt
+  - from: ./SEMAPATH-REPLICA-NOTICE.txt
+    to: licenses/SEMAPATH-REPLICA-NOTICE.txt
   - from: ./out/cli/
     to: app.asar.unpacked/cli
     filter: ['deepchat', 'deepchat.cmd', 'deepchat.mjs']
@@ -58,6 +71,10 @@ extraResources:
   - from: ./build/bundled-plugins/
     to: app.asar.unpacked/plugins
     filter: ['**/*.dcplugin']
+protocols:
+  - name: SemaPath Replica
+    schemes: ['semapath-replica']
+
 electronLanguages:
   - zh-CN
   - zh-TW
@@ -84,7 +101,7 @@ electronLanguages:
   - he-IL
   - he
 win:
-  executableName: DeepChat
+  executableName: SemaPathReplicaDev
 nsis:
   artifactName: ${name}-${version}-windows-${arch}.${ext}
   shortcutName: ${productName}
@@ -92,6 +109,10 @@ nsis:
   createDesktopShortcut: always
   allowToChangeInstallationDirectory: true
   oneClick: false
+  perMachine: false
+  allowElevation: false
+  runAfterFinish: false
+  deleteAppDataOnUninstall: false
   include: build/nsis-installer.nsh
 afterSign: scripts/notarize.js
 artifactBuildCompleted: scripts/notarize-dmg.js
@@ -139,7 +160,5 @@ linux:
   mimeTypes:
     - x-scheme-handler/deepchat
 npmRebuild: true
-publish:
-  provider: github
-  owner: ThinkInAIXYZ
-  repo: deepchat
+# SemaPath Replica modification: no upstream update feed.
+publish: null

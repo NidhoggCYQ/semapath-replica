@@ -1,7 +1,9 @@
+import type { MessageEditPayload } from '@/features/chat-page/model/displayMessage'
 import { computed, ref, shallowReactive, type ComputedRef } from 'vue'
 import type { useMessageStore } from '@/stores/ui/message'
 import type { useSessionStore } from '@/stores/ui/session'
 import type {
+  UserMessageInlineItem,
   AttachmentFallbackPolicy,
   AttachmentPreparationSummary
 } from '@shared/types/agent-interface'
@@ -23,7 +25,12 @@ type SessionClientLike = {
     | undefined
   >
   deleteMessage: (sessionId: string, messageId: string) => Promise<unknown>
-  editUserMessage: (sessionId: string, messageId: string, text: string) => Promise<unknown>
+  editUserMessage: (
+    sessionId: string,
+    messageId: string,
+    text: string,
+    inlineItems?: UserMessageInlineItem[]
+  ) => Promise<unknown>
   forkSession: (sessionId: string, messageId: string) => Promise<{ id: string }>
 }
 
@@ -33,6 +40,8 @@ type ChatClientLike = {
 
 type UseMessageActionsOptions = {
   sessionId: () => string
+  isGenerating?: () => boolean
+  forked?: (sessionId: string) => Promise<void>
   isReadOnlySession: ComputedRef<boolean>
   hasBlockingInteraction: () => boolean
   messageStore: MessageStore
@@ -57,11 +66,47 @@ type UseMessageActionsOptions = {
  */
 export function useMessageActions(options: UseMessageActionsOptions) {
   const pendingDeleteMessageId = ref<string | null>(null)
+  let pendingDeleteSessionId: string | null = null
+  const isForking = ref(false)
   const blockedRetryAttempt = ref<{ sessionId: string; messageId: string } | null>(null)
   const retryAttachmentPreparationSummary = ref<AttachmentPreparationSummary | null>(null)
   const activeRetrySessionIds = shallowReactive(new Set<string>())
   const isRetryingAttachments = computed(() => activeRetrySessionIds.has(options.sessionId()))
   const showDeleteMessageDialog = computed(() => Boolean(pendingDeleteMessageId.value))
+
+  function reportFailure(code: string, error?: unknown) {
+    const message = error instanceof Error ? error.message : ''
+    const analysisCode = [
+      'ANALYSIS_CONTEXT_NOT_FOUND',
+      'ANALYSIS_CONTEXT_LIMIT',
+      'ANALYSIS_REFERENCE_STALE',
+      'ANALYSIS_REFERENCE_UNAVAILABLE'
+    ].find((c) => message.includes(c))
+    options.notify({
+      kind: 'error',
+      code,
+      title: options.t('chat.messageActions.failed'),
+      description: options.t(
+        analysisCode ? 'analysis.errors.' + analysisCode : 'common.error.requestFailed'
+      )
+    })
+  }
+  function ownsMessage(messageId: string, sessionId = options.sessionId()) {
+    const target = options.messageStore.messageCache.get(messageId)
+    return !target || target.sessionId === sessionId
+  }
+  function mutationBlocked() {
+    if (options.isReadOnlySession.value || options.hasBlockingInteraction()) return true
+    if (options.isGenerating?.()) {
+      options.notify({
+        kind: 'warning',
+        code: 'chat.message.busy',
+        title: options.t('chat.messageActions.busy')
+      })
+      return true
+    }
+    return false
+  }
 
   async function refreshAfterRetryFailure(sessionId: string, requestId: number) {
     const restoredSession = await options.loadMessagesForSession(sessionId)
@@ -76,14 +121,20 @@ export function useMessageActions(options: UseMessageActionsOptions) {
     sessionId = options.sessionId(),
     attachmentFallbackPolicy?: AttachmentFallbackPolicy
   ) {
-    if (options.isReadOnlySession.value || !messageId) return
+    if (
+      (sessionId === options.sessionId() && mutationBlocked()) ||
+      !messageId ||
+      !ownsMessage(messageId, sessionId)
+    )
+      return
     if (blocksInteraction && options.hasBlockingInteraction()) return
     if (activeRetrySessionIds.has(sessionId)) return
 
     const requestId = options.currentRestoreRequestId()
     try {
       activeRetrySessionIds.add(sessionId)
-      options.messageStore.clearStreamingState()
+      if (options.canWriteSessionView(sessionId, requestId))
+        options.messageStore.clearStreamingState()
       // The main process truncates from the retried message onward (the user
       // prompt survives) and re-streams with fresh ids. Mirror that in the UI
       // BEFORE the IPC: the main starts streaming before the retry IPC resolves,
@@ -124,6 +175,7 @@ export function useMessageActions(options: UseMessageActionsOptions) {
     } catch (error) {
       console.error(errorMessage, error)
       if (!options.canWriteSessionView(sessionId, requestId)) return
+      reportFailure('chat.message.retryFailed', error)
       await refreshAfterRetryFailure(sessionId, requestId)
     } finally {
       activeRetrySessionIds.delete(sessionId)
@@ -190,6 +242,8 @@ export function useMessageActions(options: UseMessageActionsOptions) {
 
   async function onMessageDelete(messageId: string) {
     if (options.isReadOnlySession.value || !messageId) return
+    if (mutationBlocked() || !ownsMessage(messageId)) return
+    pendingDeleteSessionId = options.sessionId()
     pendingDeleteMessageId.value = messageId
   }
 
@@ -197,9 +251,11 @@ export function useMessageActions(options: UseMessageActionsOptions) {
     const messageId = pendingDeleteMessageId.value
     if (!messageId || options.isReadOnlySession.value) return
 
-    const sessionId = options.sessionId()
+    const sessionId = pendingDeleteSessionId
+    if (!sessionId || sessionId !== options.sessionId() || mutationBlocked()) return
     const requestId = options.currentRestoreRequestId()
     pendingDeleteMessageId.value = null
+    pendingDeleteSessionId = null
     try {
       options.messageStore.clearStreamingState()
       await options.sessionClient.deleteMessage(sessionId, messageId)
@@ -225,6 +281,7 @@ export function useMessageActions(options: UseMessageActionsOptions) {
 
   function cancelMessageDelete() {
     pendingDeleteMessageId.value = null
+    pendingDeleteSessionId = null
   }
 
   function onDeleteMessageDialogOpenChange(open: boolean) {
@@ -233,30 +290,51 @@ export function useMessageActions(options: UseMessageActionsOptions) {
     }
   }
 
-  async function onMessageEditSave(payload: { messageId: string; text: string }) {
-    if (options.isReadOnlySession.value) return
+  async function onMessageEditSave(payload: MessageEditPayload) {
+    if (mutationBlocked()) {
+      payload.onSettled?.(false)
+      return
+    }
     const messageId = payload?.messageId
     const text = payload?.text?.trim()
-    if (!messageId || !text) return
+    if (!messageId || !text || !ownsMessage(messageId)) {
+      payload.onSettled?.(false)
+      return
+    }
 
     const sessionId = options.sessionId()
     try {
-      await options.sessionClient.editUserMessage(sessionId, messageId, text)
+      if (payload.inlineItems === undefined)
+        await options.sessionClient.editUserMessage(sessionId, messageId, text)
+      else
+        await options.sessionClient.editUserMessage(sessionId, messageId, text, payload.inlineItems)
+      payload.onSettled?.(true)
       await onMessageRetry(messageId, sessionId)
     } catch (error) {
+      payload.onSettled?.(false)
       console.error('[ChatPage] edit message failed:', error)
+      if (sessionId === options.sessionId()) reportFailure('chat.message.editFailed', error)
     }
   }
 
   async function onMessageFork(messageId: string) {
     if (options.isReadOnlySession.value || !messageId) return
 
+    if (mutationBlocked() || isForking.value || !ownsMessage(messageId)) return
+    const sourceSessionId = options.sessionId()
+    const requestId = options.currentRestoreRequestId()
+    isForking.value = true
     try {
-      const forked = await options.sessionClient.forkSession(options.sessionId(), messageId)
+      const forked = await options.sessionClient.forkSession(sourceSessionId, messageId)
       await options.sessionStore.fetchSessions()
-      await options.sessionStore.selectSession(forked.id)
+      if (!options.canWriteSessionView(sourceSessionId, requestId)) return
+      if (options.forked) await options.forked(forked.id)
+      else await options.sessionStore.selectSession(forked.id)
     } catch (error) {
       console.error('[ChatPage] fork session failed:', error)
+      if (sourceSessionId === options.sessionId()) reportFailure('chat.message.forkFailed', error)
+    } finally {
+      isForking.value = false
     }
   }
 
@@ -264,7 +342,9 @@ export function useMessageActions(options: UseMessageActionsOptions) {
     // Signature stays for the emit chain. Legacy needContinue actions now send a
     // follow-up turn instead of retrying and rewriting the historical run.
     if (options.isReadOnlySession.value || !messageId) return
-    if (options.hasBlockingInteraction()) return
+    if (mutationBlocked() || !ownsMessage(messageId)) return
+    const latest = options.messageStore.messageIds.at(-1)
+    if (latest && latest !== messageId) return
     const sessionId = options.sessionId()
     if (activeRetrySessionIds.has(sessionId)) return
     try {
@@ -277,6 +357,7 @@ export function useMessageActions(options: UseMessageActionsOptions) {
       options.beginPlanTurn(sessionId)
     } catch (error) {
       console.error('[ChatPage] continue message failed:', error)
+      if (sessionId === options.sessionId()) reportFailure('chat.message.continueFailed', error)
     } finally {
       activeRetrySessionIds.delete(sessionId)
     }
@@ -289,6 +370,7 @@ export function useMessageActions(options: UseMessageActionsOptions) {
   }
 
   return {
+    isForking,
     showDeleteMessageDialog,
     retryAttachmentPreparationSummary,
     isRetryingAttachments,

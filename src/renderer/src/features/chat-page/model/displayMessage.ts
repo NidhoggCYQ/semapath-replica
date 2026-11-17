@@ -22,6 +22,13 @@ export type DisplayMessageUsage = {
   output_tokens: number
 }
 
+export type MessageEditPayload = {
+  messageId: string
+  text: string
+  inlineItems?: UserMessageInlineItem[]
+  onSettled?: (saved: boolean) => void
+}
+
 export type DisplayUserMessageTextBlock = {
   type: 'text'
   content: string
@@ -54,6 +61,7 @@ export type DisplayUserMessageFileBlock = {
 }
 
 export type DisplayUserMessageInlineBlock =
+  | { type: 'analysis'; contextId: string; label: string }
   | DisplayUserMessageTextBlock
   | DisplayUserMessageMentionBlock
   | DisplayUserMessageCodeBlock

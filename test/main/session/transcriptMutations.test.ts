@@ -2,6 +2,61 @@ import { describe, expect, it, vi } from 'vitest'
 import { SessionTranscriptMutations } from '@/session/transcriptMutations'
 
 describe('SessionTranscriptMutations', () => {
+  it('preserves failed edits and atomically replaces the old reply only after reference validation', async () => {
+    let content = JSON.stringify({
+      text: '旧问题',
+      files: [{ name: 'evidence.xlsx', path: '/fixture.xlsx' }],
+      inlineItems: [],
+      content: [
+        { type: 'text', content: '旧文本一' },
+        { type: 'text', content: '旧文本二' }
+      ]
+    })
+    let laterReplies = 1
+    const runtime = {
+      assertNoActivePendingInputs: vi.fn(),
+      cancelForTranscriptMutation: vi.fn(async () => {}),
+      invalidateTranscriptFrom: vi.fn(),
+      finishTranscriptTruncate: vi.fn()
+    }
+    const validateInput = vi.fn(async (_session, input) => {
+      input.inlineItems[0].label = '规范字段'
+    })
+    validateInput.mockRejectedValueOnce(new Error('ANALYSIS_REFERENCE_STALE'))
+    const transcript = {
+      getMessage: vi.fn(() => ({ id: 'u', sessionId: 's', role: 'user', orderSeq: 1, content })),
+      updateMessageContent: vi.fn((_id, next) => {
+        content = next
+      }),
+      deleteFromOrderSeq: vi.fn(() => {
+        laterReplies = 0
+      })
+    }
+    const service = new SessionTranscriptMutations({
+      transcript,
+      runtime,
+      validateInput,
+      runInTransaction: (fn) => fn()
+    } as any)
+    const inlineItems = [
+      { type: 'analysis', contextId: 'context', label: '伪造标签', offset: 0 }
+    ] as any
+    await expect(service.editUserMessage('s', 'u', '新问题', inlineItems)).rejects.toThrow(
+      'ANALYSIS_REFERENCE_STALE'
+    )
+    expect(laterReplies).toBe(1)
+    expect(JSON.parse(content).text).toBe('旧问题')
+    expect(runtime.cancelForTranscriptMutation).not.toHaveBeenCalled()
+    await service.editUserMessage('s', 'u', '新问题', inlineItems)
+    expect(laterReplies).toBe(0)
+    const saved = JSON.parse(content)
+    expect(saved.text).toBe('新问题')
+    expect(saved.content.filter((b) => b.type === 'text')).toEqual([
+      { type: 'text', content: '新问题' }
+    ])
+    expect(saved.inlineItems[0].label).toBe('规范字段')
+    expect(saved.files).toHaveLength(1)
+  })
   it('allows a failed Steer retry to coexist with restart-held Queue drafts', async () => {
     const message = {
       id: 'steer-1',
@@ -199,19 +254,22 @@ describe('SessionTranscriptMutations', () => {
     const runtime = {
       assertNoActivePendingInputs: vi.fn(),
       cancelForTranscriptMutation: vi.fn(async () => calls.push('cancel')),
-      invalidateTranscriptFrom: vi.fn(() => calls.push('invalidate'))
+      invalidateTranscriptFrom: vi.fn(() => calls.push('invalidate')),
+      finishTranscriptTruncate: vi.fn(() => calls.push('finish'))
     }
     const mutations = new SessionTranscriptMutations({
       transcript: {
         getMessage: vi.fn(() => message),
-        updateMessageContent: vi.fn(() => calls.push('update'))
+        updateMessageContent: vi.fn(() => calls.push('update')),
+        deleteFromOrderSeq: vi.fn(() => calls.push('truncate'))
       },
-      runtime
+      runtime,
+      runInTransaction: (operation: () => unknown) => operation()
     } as any)
 
     await mutations.editUserMessage('s1', 'message-1', 'new text')
 
-    expect(calls).toEqual(['cancel', 'invalidate', 'update'])
+    expect(calls).toEqual(['cancel', 'invalidate', 'update', 'truncate', 'finish'])
   })
 
   it('does not edit transcript history when active Run cancellation fails', async () => {

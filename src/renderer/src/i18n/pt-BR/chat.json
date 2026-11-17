@@ -624,5 +624,66 @@
     "noProgress": "Resultados idênticos e repetidos das ferramentas não geraram progresso, então o Agent parou.",
     "maxTurns": "O limite de rodadas do provedor foi atingido antes de a tarefa terminar.",
     "continueMessage": "Continue de onde parou."
+  },
+  "prediction": {
+    "title": "Follow-up suggestions",
+    "description": "Suggest a useful next question after an answer. Suggestions fill an editable draft for you to send.",
+    "hint": "Tab to accept, Esc to dismiss. Edit before sending.",
+    "model": "Suggestion model",
+    "followSession": "Follow session model",
+    "reasoning": "Reasoning",
+    "auto": "Automatic",
+    "on": "Enabled",
+    "off": "Disabled",
+    "saveFailed": "Settings were not saved. Try again.",
+    "efforts": {
+      "none": "None",
+      "minimal": "Minimal",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "xhigh": "Extra high",
+      "max": "Maximum"
+    },
+    "errors": {
+      "provider_unavailable": "Suggestion provider is unavailable.",
+      "model_unavailable": "Suggestion model is disabled or does not support text chat.",
+      "reasoning_unavailable": "This model does not support that reasoning setting. Choose Automatic.",
+      "budget_unavailable": "Insufficient context or output budget.",
+      "call_failed": "Could not generate a follow-up suggestion.",
+      "timeout": "Suggestion request timed out.",
+      "invalid_output": "The model did not return a valid suggestion."
+    },
+    "fallback": {
+      "generated": "Used the current session model instead.",
+      "empty": "The session model returned no suggestion.",
+      "failed": "The session model also failed. You can still ask a question.",
+      "pending": "A different selected model will fall back to the session model."
+    }
+  },
+  "messageActions": {
+    "failed": "Message action failed. Try again.",
+    "editing": "Edit message and regenerate",
+    "editHint": "Saving regenerates and replaces later messages. References are preserved and can be selected to remove. Failed saves keep your edits.",
+    "forkFailed": "Could not create a branch. Try again.",
+    "forkLoading": "Creating branch…",
+    "busy": "Wait for the answer to finish or stop generation first."
+  },
+  "delivery": {
+    "title": "Message delivery trace",
+    "description": "Recorded submission, transfer and rendering times. Missing stages do not imply a measured latency.",
+    "empty": "No delivery timing was captured. Historical messages are not backfilled.",
+    "inherited": "This message was inherited by a branch. Parent delivery records are not new executions.",
+    "requests": "Recorded model requests",
+    "refresh": "Refresh trace",
+    "stages": {
+      "submission_received": "Submission received",
+      "submission_linked": "Generation message linked",
+      "native_first_update": "First native update",
+      "client_update_received": "First update received by client",
+      "client_first_render": "First client render",
+      "completed": "Generation completed",
+      "failed": "Generation failed"
+    }
   }
 }

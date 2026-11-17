@@ -54,16 +54,14 @@
           />
         </div>
         <div v-if="isEditMode" class="text-sm w-full min-w-[40vw] whitespace-pre-wrap break-all">
-          <textarea
-            ref="editTextarea"
-            v-model="editedText"
-            class="text-sm bg-muted dark:bg-muted rounded-lg p-2 border flex flex-col gap-1.5 resize-none overflow-y-auto overscroll-contain min-w-[40vw] w-full max-h-[60vh]"
-            rows="1"
-            @input="autoResize"
-            @keydown.meta.enter.prevent="saveEdit"
-            @keydown.ctrl.enter.prevent="saveEdit"
-            @keydown.esc="cancelEdit"
-          ></textarea>
+          <MessageEditInput
+            :text="message.content.text || ''"
+            :inline-items="message.content.inlineItems ?? []"
+            :editable="!isSavingEdit"
+            @change="onEditChange"
+            @save="saveEdit"
+            @cancel="cancelEdit"
+          />
         </div>
         <div v-else class="flex w-full min-w-0 flex-col items-end gap-1.5">
           <div
@@ -104,7 +102,7 @@
       <MessageToolbar
         class="flex-row-reverse"
         :usage="message.usage"
-        :loading="false"
+        :loading="isSavingEdit"
         :is-assistant="false"
         :is-edit-mode="isEditMode"
         :is-capturing-image="false"
@@ -122,6 +120,7 @@
 </template>
 
 <script setup lang="ts">
+import type { MessageEditPayload } from '@/features/chat-page/model/displayMessage'
 import type {
   DisplayUserMessage,
   DisplayUserMessageInlineBlock,
@@ -136,6 +135,8 @@ import { useI18n } from 'vue-i18n'
 import MessageInfo from './MessageInfo.vue'
 import ChatAttachmentItem from '../chat/ChatAttachmentItem.vue'
 import MessageToolbar from './MessageToolbar.vue'
+import MessageEditInput from './MessageEditInput.vue'
+import type { UserMessageInlineItem } from '@shared/types/agent-interface'
 import MessageContent from './MessageContent.vue'
 import MessageTextContent from './MessageTextContent.vue'
 import { createDeviceClient } from '@api/DeviceClient'
@@ -251,7 +252,7 @@ const emit = defineEmits<{
   fileClick: [fileName: string]
   retry: [messageId: string]
   delete: [messageId: string]
-  editSave: [payload: { messageId: string; text: string }]
+  editSave: [payload: MessageEditPayload]
 }>()
 
 const previewFile = (filePath: string) => {
@@ -267,6 +268,12 @@ const toggleExpanded = () => {
   hasManualCollapsePreference.value = true
 }
 
+const isSavingEdit = ref(false)
+const editedInlineItems = ref<UserMessageInlineItem[]>([])
+function onEditChange(value: { text: string; inlineItems: UserMessageInlineItem[] }) {
+  editedText.value = value.text
+  editedInlineItems.value = value.inlineItems
+}
 const startEdit = () => {
   if (effectiveReadOnly.value) {
     return
@@ -290,17 +297,17 @@ const saveEdit = async () => {
   const nextText = editedText.value.trim()
   if (!nextText) return
 
-  try {
-    emit('editSave', {
-      messageId: props.message.id,
-      text: nextText
-    })
-
-    // Exit edit mode
-    isEditMode.value = false
-  } catch (error) {
-    console.error('Failed to save edit:', error)
-  }
+  if (isSavingEdit.value) return
+  isSavingEdit.value = true
+  emit('editSave', {
+    messageId: props.message.id,
+    text: nextText,
+    inlineItems: editedInlineItems.value,
+    onSettled: (saved) => {
+      isSavingEdit.value = false
+      if (saved) isEditMode.value = false
+    }
+  })
 }
 
 const onRetryAction = () => {
@@ -310,24 +317,12 @@ const onRetryAction = () => {
   emit('retry', props.message.id)
 }
 
-const getCopyText = () => {
-  if (props.message.content?.content && props.message.content.content.length > 0) {
-    return props.message.content.content
-      .map((block) => {
-        if (typeof block.content === 'string') {
-          return block.content
-        }
-        return ''
-      })
-      .join('')
-      .trim()
-  }
-  return props.message.content.text || ''
-}
+const getCopyText = () => visibleMessageText.value
 
 const copyText = computed(() => getCopyText())
 
 const cancelEdit = () => {
+  if (isSavingEdit.value) return
   isEditMode.value = false
 }
 

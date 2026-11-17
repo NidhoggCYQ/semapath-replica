@@ -26,6 +26,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve('src/main/index.ts'),
+          analysisWorker: resolve('src/main/analysisWorkerEntry.ts'),
+          analysisReportWorker: resolve('src/main/analysisReportWorkerEntry.ts'),
           backgroundExecUtilityHost: resolve('src/main/backgroundExecUtilityHostEntry.ts'),
           fileWatcherUtilityHost: resolve('src/main/fileWatcherUtilityHostEntry.ts'),
           schedulerUtilityHost: resolve('src/main/schedulerUtilityHostEntry.ts'),

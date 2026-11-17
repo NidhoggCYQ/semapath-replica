@@ -1,3 +1,25 @@
+import { AnalysisReportService } from '../analysis/reports/service'
+import { AnalysisWorkspaceService } from '../analysis/workspaceService'
+import { AnalysisToolService } from '../analysis/toolService'
+import { AnalysisFileExecutionService } from '../analysis/fileExecutionService'
+import { AnalysisInteractionService } from '../analysis/interactionService'
+import { createAnalysisInteractionRoutes } from '../analysis/interactionRoutes'
+import { createAnalysisWorkspaceRoutes } from '../analysis/workspaceRoutes'
+import { AnalysisError } from '../analysis/errors'
+import { analysisTaskChangedEvent } from '@shared/contracts/events/analysis.events'
+import { createAnalysisReportRoutes } from '../analysis/reports/routes'
+import { createNativeReportRenderer } from '../analysis/reports/nativeRenderer'
+import { NaturalAnalyzer } from '../analysis/naturalAnalyzer'
+import { ConnectedDataGateway } from '../analysis/retrieval/gateway'
+import { AnalysisModelGateway } from '../analysis/modelGateway'
+import { AnalysisService } from '../analysis/service'
+import { createAnalysisRoutes } from '../analysis/routes'
+import { SqlVault } from '../analysis/sqlVault'
+import { SqlService } from '../analysis/sqlService'
+import { createAnalysisDataRoutes } from '../analysis/dataRoutes'
+import { PbiService } from '../analysis/powerbi/service'
+import { PbiAuth } from '../analysis/powerbi/auth'
+import { createPowerBiRoutes } from '../analysis/powerbi/routes'
 import logger from '@shared/logger'
 import {
   mainLogger,
@@ -128,6 +150,13 @@ import { createSyncRoutes } from '../sync/routes'
 import { createPlatformRoutes } from '../platform/routes'
 import { createHookRoutes } from '../hook/routes'
 import { createAppSettingsRoutes } from './settingsRoutes'
+import { AnalysisBranchService } from '@/analysis/branchService'
+import { MessageDeliveryTrace } from '@/session/messageDelivery'
+import { ComposerPrediction } from '@/session/composerPrediction'
+import {
+  ComposerPredictionSettingsSchema,
+  defaultComposerPredictionSettings
+} from '@shared/composerPrediction'
 import { createAppRoutes } from './routes'
 import { ApprovalBroker, createApprovalRoutes } from '@/approval'
 import {
@@ -752,7 +781,15 @@ export async function createMainProcessControl(dependencies: {
       })
     }
   }
+  let messageDeliveryTrace: MessageDeliveryTrace | undefined
+  let composerPrediction: ComposerPrediction | undefined
   const publishDeepchatEvent = (name: DeepchatEventName, payload: unknown): void => {
+    if (name === 'models.changed' || name === 'providers.changed') composerPrediction?.invalidate()
+    try {
+      messageDeliveryTrace?.observe(name, payload)
+    } catch {
+      logger.warn('[DeliveryTrace] Timing record unavailable')
+    }
     sessionEventRouter.publish(name, payload)
   }
   dependencies.mcpAppSandboxRegistry.setConsentPublisher((windowId, payload) => {
@@ -985,6 +1022,13 @@ export async function createMainProcessControl(dependencies: {
     () => projectService.notifyEnvironmentProjectionChanged()
   )
   let providerRuntime!: ProviderRuntime
+  let naturalAnalyzer: NaturalAnalyzer | undefined
+  let analysisToolService: AnalysisToolService | undefined
+  let analysisInteractionService: AnalysisInteractionService | undefined
+  let analysisBranchService: AnalysisBranchService | undefined
+  let analysisReportService: AnalysisReportService | undefined
+  let analysisSqlService: SqlService | undefined
+  let analysisPowerBiService: PbiService | undefined
   oauthService = new OAuthService(
     {
       getProviderById: (providerId) => providerSettings.getProviderById(providerId),
@@ -1115,7 +1159,9 @@ export async function createMainProcessControl(dependencies: {
       resourcesPath: process.resourcesPath,
       isPackaged: app.isPackaged
     })
+  // SemaPath Replica modification: install the helper only in this application profile.
   const cliLauncherService = new CliLauncherService({
+    launcherDirectory: path.join(app.getPath('userData'), 'bin'),
     homeDirectory: app.getPath('home'),
     userDataDirectory: app.getPath('userData'),
     environmentPath: process.env.PATH,
@@ -1543,6 +1589,18 @@ export async function createMainProcessControl(dependencies: {
     }
   }
   const agentToolDependencies: AgentToolDependencies = {
+    analysis: {
+      get fileExecution() {
+        return analysisToolService?.fileExecution
+      },
+      definitions: (sessionId) =>
+        analysisToolService?.definitions(sessionId) ?? Promise.resolve([]),
+      has: (name) => analysisToolService?.has(name) ?? false,
+      call: (name, args, sessionId, options) => {
+        if (!analysisToolService) throw new AnalysisError('WORKSPACE_SESSION_MISSING')
+        return analysisToolService.call(name, args, sessionId, options)
+      }
+    },
     agentInvocationAdmission,
     sessions: {
       resolveConversationWorkdir: async (conversationId) => {
@@ -1893,6 +1951,13 @@ export async function createMainProcessControl(dependencies: {
     programmaticToolParents
   })
   const sessionTranscriptMutations = new SessionTranscriptMutations({
+    validateInput: async (sessionId, input) => {
+      if (!analysisInteractionService && input.inlineItems?.some((i) => i.type === 'analysis'))
+        throw new AnalysisError('ANALYSIS_CONTEXT_NOT_FOUND')
+      await analysisInteractionService?.validateInput(sessionId, input)
+    },
+    forkAnalysis: (source, target, message, ids) =>
+      analysisBranchService?.fork(source, target, message, ids),
     transcript: sessionData.transcript,
     settings: sessionData.settings,
     pendingInputs: sessionData.pendingInputs,
@@ -2058,6 +2123,11 @@ export async function createMainProcessControl(dependencies: {
     agentLifecycle
   })
   sessionTurn = new SessionTurn({
+    validateAnalysisContexts: (sessionId, input, signal) => {
+      if (!input.inlineItems?.some((item) => item.type === 'analysis')) return
+      if (!analysisInteractionService) throw new AnalysisError('ANALYSIS_CONTEXT_NOT_FOUND')
+      return analysisInteractionService.validateInput(sessionId, input, signal)
+    },
     sessions: appSessionService,
     runtime: {
       resolveSession: (sessionId) => {
@@ -2094,8 +2164,8 @@ export async function createMainProcessControl(dependencies: {
         sessionTranscriptMutations.commitRetryMessage(sessionId, sourceOrderSeq),
       deleteMessage: (sessionId, messageId) =>
         sessionTranscriptMutations.deleteMessage(sessionId, messageId),
-      editUserMessage: (sessionId, messageId, text) =>
-        sessionTranscriptMutations.editUserMessage(sessionId, messageId, text)
+      editUserMessage: (sessionId, messageId, text, inlineItems) =>
+        sessionTranscriptMutations.editUserMessage(sessionId, messageId, text, inlineItems)
     },
     workdir: sessionAssignment,
     projection: sessionQuery
@@ -2623,6 +2693,7 @@ export async function createMainProcessControl(dependencies: {
     await runDestroyStep('agentCliTokenAuthority.clear', () => agentCliTokenAuthority.clear())
     await runDestroyStep('cliServer.stop', () => cliServer.stop())
     await runDestroyStep('tapeInspectorHeadWatcher.close', () => tapeInspectorHeadWatcher.close())
+    await runDestroyStep('composerPrediction.cancel', () => composerPrediction?.invalidate())
     await runDestroyStep('typedEventHub.close', () => typedEventHub.close())
     await runDestroyStep('cliMutationGuard.clear', () => cliMutationGuard.clear())
     await runDestroyStep('cliAuditLog.close', () => cliAuditLog.close())
@@ -2637,6 +2708,10 @@ export async function createMainProcessControl(dependencies: {
     await runDestroyStep('remoteService.destroy', () => remoteService.destroy())
     await runDestroyStep('hookService.stop', () => hookService.stop())
     await runDestroyStep('sessionRuntimes.suspend', () => suspendSessionRuntimes())
+    await runDestroyStep('analysisToolService.dispose', () => analysisToolService?.dispose())
+    await runDestroyStep('analysisInteractionService.dispose', () =>
+      analysisInteractionService?.dispose()
+    )
     await runDestroyStep('toolService.shutdownCodeRuntime', () => toolService.shutdownCodeRuntime())
     const pendingSkillInitialization = skillInitializationPromise
     if (pendingSkillInitialization) {
@@ -2722,6 +2797,10 @@ export async function createMainProcessControl(dependencies: {
     }
     await runDestroyStep('knowledgeService.destroy', () => knowledgeService.destroy())
     await runDestroyStep('ocrRuntimeService.close', () => ocrRuntimeService.close())
+    await runDestroyStep('analysisReportService.dispose', () => analysisReportService?.dispose())
+    await runDestroyStep('analysisSqlService.dispose', () => analysisSqlService?.dispose())
+    await runDestroyStep('analysisPowerBiService.dispose', () => analysisPowerBiService?.dispose())
+    await runDestroyStep('naturalAnalyzer.dispose', () => naturalAnalyzer?.dispose())
     await runDestroyStep('providerRuntime.shutdown', () => providerRuntime.shutdown())
     await runDestroyStep('acpRuntime.shutdown', () => acpRuntimeOwner.shutdown())
     await runDestroyStep('mainDatabase.close', () => mainDatabase.close())
@@ -2842,6 +2921,94 @@ export async function createMainProcessControl(dependencies: {
       }
     })
     const workspaceRoutes = createWorkspaceRoutes(workspaceService)
+    naturalAnalyzer = new NaturalAnalyzer(
+      new AnalysisModelGateway(providerSettings, providerRuntime, () =>
+        agentSettings.getDefaultModel()
+      )
+    )
+    const analysisService = new AnalysisService(
+      mainDatabase,
+      naturalAnalyzer,
+      path.join(app.getPath('userData'), 'analysis-datasets')
+    )
+    const analysisRoutes = createAnalysisRoutes(analysisService)
+    analysisSqlService = new SqlService(
+      analysisService,
+      new SqlVault(path.join(app.getPath('userData'), 'analysis-connections.json'))
+    )
+    const analysisDataRoutes = createAnalysisDataRoutes(analysisService, analysisSqlService)
+    analysisPowerBiService = new PbiService(
+      analysisService,
+      path.join(app.getPath('userData'), 'analysis-powerbi-bindings.json'),
+      new PbiAuth(path.join(app.getPath('userData'), 'analysis-powerbi-auth.bin'))
+    )
+    const analysisPowerBiRoutes = createPowerBiRoutes(analysisPowerBiService)
+    const analysisRetrieval = new ConnectedDataGateway(analysisSqlService, analysisPowerBiService)
+    naturalAnalyzer.setRetrieval(analysisRetrieval)
+    analysisReportService = new AnalysisReportService(
+      mainDatabase,
+      analysisService,
+      path.join(app.getPath('userData'), 'analysis-reports'),
+      createNativeReportRenderer()
+    )
+    const analysisReportRoutes = createAnalysisReportRoutes(analysisReportService)
+    const analysisWorkspace = new AnalysisWorkspaceService(mainDatabase, analysisService, {
+      get: (id) => appSessionService.get(id),
+      list: () => appSessionService.list(),
+      create: async (title, projectDir) => {
+        const model = agentSettings.getDefaultModel()
+        if (!model?.providerId || !model.modelId) throw new AnalysisError('MODEL_NOT_CONFIGURED')
+        return sessionLifecycle.createDetachedSession({
+          agentId: 'deepchat',
+          title,
+          providerId: model.providerId,
+          modelId: model.modelId,
+          ...(projectDir ? { projectDir } : {})
+        })
+      },
+      rename: (id, title) => sessionQuery.renameSession(id, title),
+      pin: (id, pinned) => sessionQuery.toggleSessionPinned(id, pinned),
+      project: (id, projectDir) => sessionAssignment.setSessionProjectDir(id, projectDir)
+    })
+    const analysisChanged = (taskId: string) =>
+      publishDeepchatEvent(analysisTaskChangedEvent.name, { taskId })
+    analysisService.setWorkspace(analysisWorkspace, analysisChanged)
+    analysisBranchService = new AnalysisBranchService({
+      connection: mainDatabase,
+      workspace: analysisWorkspace,
+      transcript: sessionData.transcript
+    })
+    analysisInteractionService = new AnalysisInteractionService({
+      connection: mainDatabase,
+      analysis: analysisService,
+      workspace: analysisWorkspace,
+      retrieval: analysisRetrieval,
+      message: (id) => sessionQuery.getMessage(id)
+    })
+    const analysisInteractionRoutes = createAnalysisInteractionRoutes(
+      analysisInteractionService,
+      analysisWorkspace
+    )
+    analysisToolService = new AnalysisToolService({
+      fileExecution: new AnalysisFileExecutionService({
+        connection: mainDatabase,
+        analysis: analysisService,
+        workspace: analysisWorkspace,
+        root: path.join(app.getPath('userData'), 'analysis-executions'),
+        changed: analysisChanged
+      }),
+      readContext: (taskId, contextId, signal) =>
+        analysisInteractionService!.read(taskId, contextId, signal),
+      connection: mainDatabase,
+      analysis: analysisService,
+      workspace: analysisWorkspace,
+      retrieval: analysisRetrieval,
+      reports: analysisReportService,
+      session: (id) => agentToolDependencies.sessions.resolveConversationSessionInfo(id),
+      changed: analysisChanged
+    })
+    analysisToolService.interruptOpen()
+    const analysisWorkspaceRoutes = createAnalysisWorkspaceRoutes(analysisWorkspace)
     const orchestrationRoutes = createOrchestrationRoutes({
       resolveCapability: (target) =>
         'sessionId' in target
@@ -2862,7 +3029,27 @@ export async function createMainProcessControl(dependencies: {
         })
       }
     })
+    messageDeliveryTrace = new MessageDeliveryTrace(mainDatabase)
+    composerPrediction = new ComposerPrediction({
+      sessions: sessionQuery,
+      models: providerSettings,
+      provider: providerRuntime,
+      enabled: () => dependencies.settingsStore.get<boolean>('composerPredictionsEnabled') ?? true,
+      settings: () =>
+        ComposerPredictionSettingsSchema.parse(
+          dependencies.settingsStore.get('composerPredictionSettings') ??
+            defaultComposerPredictionSettings()
+        ),
+      changed: (status, revision) =>
+        publishDeepchatEvent('settings.changed', {
+          version: Date.now(),
+          changedKeys: ['composerPredictionStatus', 'composerPredictionRevision'],
+          values: { composerPredictionStatus: status, composerPredictionRevision: revision }
+        })
+    })
     const sessionRoutes = createSessionRoutes({
+      deliveryTrace: messageDeliveryTrace,
+      composerPrediction,
       lifecycle: sessionLifecycle,
       projection: sessionQuery,
       desktop: desktopSessionBinding,
@@ -2946,6 +3133,7 @@ export async function createMainProcessControl(dependencies: {
         semanticNotificationRouter.acknowledgePresentation(episodeId, { webContentsId })
     })
     const appSettingsRoutes = createAppSettingsRoutes({
+      composerPrediction,
       settings: dependencies.settingsStore,
       agentDefaults,
       privacy: dependencies.privacySettings,
@@ -3062,6 +3250,12 @@ export async function createMainProcessControl(dependencies: {
         toolchainRoutes,
         knowledgeRoutes,
         workspaceRoutes,
+        analysisRoutes,
+        analysisDataRoutes,
+        analysisPowerBiRoutes,
+        analysisReportRoutes,
+        analysisWorkspaceRoutes,
+        analysisInteractionRoutes,
         orchestrationRoutes,
         projectRoutes,
         sessionRoutes,

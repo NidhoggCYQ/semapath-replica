@@ -66,9 +66,14 @@ export function normalizeUserMessageInput(input: string | SendMessageInput): Sen
   }
 }
 
-export function buildEditedUserContent(rawContent: string, text: string): string {
+export function buildEditedUserContent(
+  rawContent: string,
+  text: string,
+  inlineItems?: SendMessageInput['inlineItems']
+): string {
   const fallback: UserMessageContent = {
     text,
+    ...(inlineItems?.length ? { inlineItems } : {}),
     files: [],
     links: [],
     search: false,
@@ -82,28 +87,19 @@ export function buildEditedUserContent(rawContent: string, text: string): string
     }
 
     const next = { ...parsed, text } as Record<string, unknown>
-    delete next.inlineItems
+    if (inlineItems?.length) next.inlineItems = inlineItems
+    else delete next.inlineItems
     if (!Array.isArray(next.files)) next.files = []
     if (!Array.isArray(next.links)) next.links = []
     if (typeof next.search !== 'boolean') next.search = false
     if (typeof next.think !== 'boolean') next.think = false
 
     if (Array.isArray(next.content)) {
-      let replaced = false
-      const mapped = next.content.map((item) => {
-        if (
-          !replaced &&
-          item &&
-          typeof item === 'object' &&
-          !Array.isArray(item) &&
-          (item as { type?: unknown }).type === 'text'
-        ) {
-          replaced = true
-          return { ...(item as Record<string, unknown>), content: text }
-        }
-        return item
-      })
-      if (!replaced) mapped.unshift({ type: 'text', content: text })
+      const mapped = next.content.filter(
+        (item) =>
+          !(item && typeof item === 'object' && (item as { type?: unknown }).type === 'text')
+      )
+      mapped.unshift({ type: 'text', content: text })
       next.content = mapped
     }
 

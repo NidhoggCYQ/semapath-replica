@@ -1,3 +1,5 @@
+// SemaPath Replica modification: use an independent Windows application ID.
+import { PRODUCT_APP_ID } from '@shared/productIdentity'
 import { electronApp } from '@electron-toolkit/utils'
 import { app } from 'electron'
 import { createSettingsStore } from '@/config/settingsStore'
@@ -35,7 +37,7 @@ export async function startMainProcess(
   await splashWindow.create()
 
   try {
-    electronApp.setAppUserModelId('com.wefonk.deepchat')
+    electronApp.setAppUserModelId(PRODUCT_APP_ID)
     const settingsStore = createSettingsStore()
     setMainLoggingEnabled(settingsStore.get<boolean>('loggingEnabled') ?? false)
     const secretStore = new SecretStore(settingsStore)

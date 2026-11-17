@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MessageDeliveryViewSchema } from '../../messageDelivery'
 import { OrchestrationPolicySchema } from '../../orchestration/policy'
 import { ToolModeSchema } from '../../toolMode'
 import type { SearchResult } from '@shared/types/core/search'
@@ -608,12 +609,33 @@ export const sessionsDeleteMessageRoute = defineRouteContract({
   })
 })
 
+export const sessionsGetMessageDeliveryTraceRoute = defineRouteContract({
+  name: 'sessions.getMessageDeliveryTrace',
+  input: z.object({ messageId: EntityIdSchema }),
+  output: MessageDeliveryViewSchema
+})
+export const sessionsRecordMessageDeliveryRoute = defineRouteContract({
+  name: 'sessions.recordMessageDelivery',
+  input: z.object({
+    sessionId: EntityIdSchema,
+    messageId: EntityIdSchema,
+    stage: z.enum(['client_update_received', 'client_first_render'])
+  }),
+  output: z.object({ recorded: z.boolean() })
+})
+export const sessionsGetComposerPredictionRoute = defineRouteContract({
+  name: 'sessions.getComposerPrediction',
+  input: z.object({ sessionId: EntityIdSchema, messageId: EntityIdSchema }),
+  output: z.object({ suggestion: z.string().max(240).nullable() })
+})
+
 export const sessionsEditUserMessageRoute = defineRouteContract({
   name: 'sessions.editUserMessage',
   input: z.object({
     sessionId: EntityIdSchema,
     messageId: EntityIdSchema,
-    text: z.string()
+    inlineItems: z.array(UserMessageInlineItemSchema).max(100).optional(),
+    text: z.string().min(1).max(1000000)
   }),
   output: z.object({
     message: ChatMessageRecordSchema

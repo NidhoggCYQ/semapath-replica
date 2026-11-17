@@ -29,7 +29,11 @@
 
         <div class="flex min-w-0 flex-col w-full space-y-1.5">
           <MessageInfo :name="currentMessage.model_name" :timestamp="currentMessage.timestamp" />
-          <div class="flex flex-col w-full gap-1.5" data-message-content="true">
+          <div
+            class="flex flex-col w-full gap-1.5"
+            data-message-content="true"
+            :data-analysis-quote-origin="JSON.stringify({ kind: 'message', messageId: message.id })"
+          >
             <Spinner
               v-if="
                 currentContent.length === 0 &&
@@ -160,6 +164,7 @@
             @next="handleAction('next')"
             @fork="handleAction('fork')"
             @trace="handleAction('trace')"
+            @delivery-trace="deliveryOpen = true"
             @tape-inspector="handleAction('tapeInspector')"
             @memory="handleMemoryDetails"
           />
@@ -167,6 +172,11 @@
       </div>
     </component>
 
+    <MessageDeliveryTraceDialog
+      v-if="deliveryOpen"
+      :message-id="message.id"
+      @close="deliveryOpen = false"
+    />
     <ContextMenuContent v-if="!useLegacyActions" class="w-56">
       <template v-if="showSelectionMenu">
         <ContextMenuItem @select="handleSelectionCopy">
@@ -275,6 +285,7 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from '@shadcn/components/ui/context-menu'
+import MessageDeliveryTraceDialog from './MessageDeliveryTraceDialog.vue'
 import { createDeviceClient } from '@api/DeviceClient'
 import { useThemeStore } from '@/stores/theme'
 import { notifyRenderer } from '@renderer-notifications/rendererNotificationPort'
@@ -379,6 +390,7 @@ const emit = defineEmits<{
 const currentThreadId = computed(() => props.message.conversationId || '')
 const useLegacyActions = computed(() => props.useLegacyActions !== false)
 const resolvedIsInGeneratingThread = computed(() => props.isInGeneratingThread ?? false)
+const deliveryOpen = ref(false)
 const showTrace = computed(() => props.showTrace ?? false)
 const isReadOnly = computed(() => props.isReadOnly === true)
 const rootRef = ref<HTMLElement | null>(null)

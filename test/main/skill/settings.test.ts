@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { app } from 'electron'
 import { SkillSettings } from '@/skill/settings'
 
@@ -9,7 +10,10 @@ describe('SkillSettings', () => {
     set: vi.fn((key: string, value: unknown) => values.set(key, value))
   }
 
+  afterEach(() => vi.unstubAllEnvs())
+
   beforeEach(() => {
+    vi.stubEnv('SEMAPATH_REPLICA_HOME', '')
     values.clear()
     vi.clearAllMocks()
     vi.mocked(app.getPath).mockReturnValue('/home/tester')
@@ -20,7 +24,21 @@ describe('SkillSettings', () => {
 
     expect(settings.isEnabled()).toBe(true)
     expect(settings.isDraftSuggestionsEnabled()).toBe(false)
-    expect(settings.getPath()).toBe('/home/tester/.deepchat/skills')
+    expect(settings.getPath()).toBe(path.join('/home/tester', '.semapath-replica', 'skills'))
+  })
+
+  it('keeps its default Skill library in the external replica home', () => {
+    const home = path.resolve('external-test-cache', 'replica-home')
+    vi.stubEnv('SEMAPATH_REPLICA_HOME', home)
+    const settings = new SkillSettings(store as never)
+    expect(settings.getPath()).toBe(path.join(home, 'skills'))
+  })
+
+  it('preserves an explicitly configured library instead of silently moving it', () => {
+    const library = path.resolve('custom-skill-library')
+    values.set('skillsPath', library)
+    const settings = new SkillSettings(store as never)
+    expect(settings.getPath()).toBe(library)
   })
 
   it('reads and writes Skill-owned settings', () => {

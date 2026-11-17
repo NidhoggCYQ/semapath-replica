@@ -1,3 +1,5 @@
+// SemaPath Replica modification: keep Skills and installation state isolated.
+import { getProductHomePath } from '@/app/productPaths'
 import { app } from 'electron'
 import path from 'path'
 import type { SettingsStore } from '@/config/settingsStore'
@@ -43,7 +45,8 @@ export class SkillSettings implements SkillSettingsPort {
 
   getPath(): string {
     return (
-      this.store.get<string>('skillsPath') || path.join(app.getPath('home'), '.deepchat', 'skills')
+      this.store.get<string>('skillsPath') ||
+      path.join(getProductHomePath(app.getPath('home')), 'skills')
     )
   }
 

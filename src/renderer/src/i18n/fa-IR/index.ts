@@ -1,3 +1,4 @@
+import analysis from './analysis.json'
 import common from './common.json'
 import image from './image.json'
 import mcp from './mcp.json'
@@ -34,6 +35,7 @@ const others = {
 }
 
 export default {
+  analysis,
   common,
   image,
   mcp,

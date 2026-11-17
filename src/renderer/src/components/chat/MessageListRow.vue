@@ -54,6 +54,7 @@
 </template>
 
 <script setup lang="ts">
+import type { MessageEditPayload } from '@/features/chat-page/model/displayMessage'
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MessageItemAssistant from '@/components/message/MessageItemAssistant.vue'
@@ -95,7 +96,7 @@ const emit = defineEmits<{
   continue: [conversationId: string, messageId: string]
   trace: [messageId: string]
   tapeInspector: [messageId: string]
-  editSave: [payload: { messageId: string; text: string }]
+  editSave: [payload: MessageEditPayload]
   copyImage: [
     messageId: string,
     parentId: string | undefined,
@@ -194,7 +195,7 @@ const onContinue = (conversationId: string, messageId: string) =>
   emit('continue', conversationId, messageId)
 const onTrace = (messageId: string) => emit('trace', messageId)
 const onTapeInspector = (messageId: string) => emit('tapeInspector', messageId)
-const onEditSave = (payload: { messageId: string; text: string }) => emit('editSave', payload)
+const onEditSave = (payload: MessageEditPayload) => emit('editSave', payload)
 const onCopyImage = (
   messageId: string,
   parentId: string | undefined,

@@ -1,0 +1,10 @@
+This project incorporates and modifies DeepChat v1.1.1.
+Upstream: https://github.com/ThinkInAIXYZ/deepchat
+Commit: ca75acfdc680fa3d0a2bbde13575fa711d08a3bd
+Upstream copyright: ThinkInAIXYZ and contributors.
+License: Apache License, Version 2.0; see LICENSE.
+
+Replica modifications starting 2026-10-25 include independent application identity,
+isolated storage and protocol, disabled upstream updates, local development tooling
+and SemaPath-compatible analysis development. This is an independent development
+project and is not an official upstream DeepChat or SemaPath release.

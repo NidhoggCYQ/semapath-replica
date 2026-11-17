@@ -1,3 +1,5 @@
+import { defaultComposerPredictionSettings } from '@shared/composerPrediction'
+import type { ComposerPrediction } from '@/session/composerPrediction'
 import {
   SETTINGS_KEYS,
   configGetEntriesRoute,
@@ -32,6 +34,7 @@ import { createRouteMap, type DeepchatRouteMap } from '@/routes/routeRegistry'
 
 export function createAppSettingsRoutes(deps: {
   settings: Pick<SettingsStore, 'get' | 'set'>
+  composerPrediction?: Pick<ComposerPrediction, 'getStatus' | 'invalidate' | 'revision'>
   agentDefaults: DeepChatDefaults
   privacy: PrivacySettingsPort
   traceSettings: AgentTraceSettingsPort
@@ -77,6 +80,11 @@ export function createAppSettingsRoutes(deps: {
     codeFontFamily: deps.fonts.getCodeFontFamily(),
     artifactsEffectEnabled: deps.desktopSettings.getArtifactsEffectEnabled(),
     autoScrollEnabled: deps.desktopSettings.getAutoScrollEnabled(),
+    composerPredictionsEnabled: deps.settings.get<boolean>('composerPredictionsEnabled') ?? true,
+    composerPredictionSettings:
+      deps.settings.get('composerPredictionSettings') ?? defaultComposerPredictionSettings(),
+    composerPredictionStatus: deps.composerPrediction?.getStatus() ?? null,
+    composerPredictionRevision: deps.composerPrediction?.revision ?? 0,
     autoCompactionEnabled: deps.agentDefaults.getAutoCompactionEnabled(),
     autoCompactionTriggerThreshold: deps.agentDefaults.getAutoCompactionTriggerThreshold(),
     autoCompactionRetainRecentPairs: deps.agentDefaults.getAutoCompactionRetainRecentPairs(),
@@ -102,6 +110,11 @@ export function createAppSettingsRoutes(deps: {
   }
   const applyChange = (change: SettingsChange): void => {
     switch (change.key) {
+      case 'composerPredictionsEnabled':
+      case 'composerPredictionSettings':
+        deps.settings.set(change.key, change.value)
+        deps.composerPrediction?.invalidate()
+        return
       case 'fontSizeLevel':
         deps.desktopSettings.setFontSizeLevel(change.value)
         return
@@ -192,11 +205,13 @@ export function createAppSettingsRoutes(deps: {
       recordChange(change)
     }
     const changedKeys = changes.map((change) => change.key)
-    return {
+    const result = {
       version: Date.now(),
       changedKeys,
       values: pickSnapshot(readSnapshot(), changedKeys)
     }
+    deps.publishEvent('settings.changed', result)
+    return result
   }
 
   return createRouteMap([

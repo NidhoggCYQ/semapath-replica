@@ -1,6 +1,6 @@
 import { defineComponent } from 'vue'
 import { shallowMount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 
 const uiSettingsStore = vi.hoisted(() => ({
   autoScrollEnabled: true,
@@ -37,10 +37,13 @@ const settingsPageShellStub = defineComponent({
   template: '<main><slot /></main>'
 })
 
+let CommonSettings: (typeof import('../../../src/renderer/settings/components/CommonSettings.vue'))['default']
+beforeAll(async () => {
+  CommonSettings = (await import('../../../src/renderer/settings/components/CommonSettings.vue'))
+    .default
+}, 30000)
 describe('CommonSettings', () => {
-  it('discloses local request-content persistence beside the Trace setting', async () => {
-    const { default: CommonSettings } =
-      await import('../../../src/renderer/settings/components/CommonSettings.vue')
+  it('discloses local request-content persistence beside the Trace setting', () => {
     const wrapper = shallowMount(CommonSettings, {
       global: {
         stubs: {

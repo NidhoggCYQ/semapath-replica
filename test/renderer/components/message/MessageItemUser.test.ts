@@ -375,7 +375,7 @@ describe('MessageItemUser', () => {
     expect(wrapper.find('[data-user-message-toggle="true"]').exists()).toBe(true)
   })
 
-  it('shows full textarea content in edit mode even when the message is collapsible', async () => {
+  it('shows full editable content even when the message is collapsible', async () => {
     const wrapper = mount(MessageItemUser, {
       props: {
         message: createMessage({}, { text: 'c'.repeat(700) })
@@ -386,9 +386,9 @@ describe('MessageItemUser', () => {
     await wrapper.get('[data-action="edit"]').trigger('click')
     await nextTick()
 
-    expect(wrapper.find('textarea').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="message-edit-input"]').exists()).toBe(true)
     expect(wrapper.find('[data-user-message-content-body="true"]').exists()).toBe(false)
-    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('c'.repeat(700))
+    expect(wrapper.get('[role="textbox"]').text()).toBe('c'.repeat(700))
   })
 
   it('re-evaluates collapse state when content length drops below the collapse threshold', async () => {

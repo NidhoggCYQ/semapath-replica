@@ -839,7 +839,8 @@ export class SessionTranscript {
   cloneSentMessagesToSession(
     sourceSessionId: string,
     targetSessionId: string,
-    maxOrderSeq: number
+    maxOrderSeq: number,
+    onClone?: (source: ChatMessageRecord, targetId: string) => void
   ): number {
     const sourceRows = this.database.deepchatMessagesTable
       .getBySessionUpToOrderSeq(sourceSessionId, maxOrderSeq)
@@ -860,7 +861,10 @@ export class SessionTranscript {
         content: record.content,
         status: 'sent',
         isContextEdge: record.isContextEdge,
-        metadata: record.metadata
+        metadata: JSON.stringify({
+          ...parseMessageMetadata(record.metadata),
+          branchInherited: true
+        })
       })
       if (record.role === 'user') {
         const userContent = this.parseUserContent(record.content)
@@ -880,6 +884,7 @@ export class SessionTranscript {
         record.content,
         record.updatedAt
       )
+      onClone?.(record, nextId)
       nextOrderSeq += 1
     }
 

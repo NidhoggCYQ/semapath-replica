@@ -1,3 +1,5 @@
+// SemaPath Replica modification: keep Skills and installation state isolated.
+import { getProductHomePath } from '@/app/productPaths'
 import { app, shell } from 'electron'
 import path from 'path'
 import fs from 'fs'
@@ -408,7 +410,7 @@ export class SkillService implements SkillServicePort {
     const normalized = configuredPath?.trim()
     const homePath = app.getPath('home')
     const homeDir = homePath ? path.resolve(homePath) : path.resolve('.')
-    const fallbackDir = path.join(homeDir, '.deepchat', 'skills')
+    const fallbackDir = path.join(getProductHomePath(homeDir), 'skills')
     const resolved = normalized ? path.resolve(normalized) : fallbackDir
     const repairedDefaultPath = normalized
       ? this.repairPortableDefaultSkillsPath(normalized, homeDir)
@@ -429,7 +431,7 @@ export class SkillService implements SkillServicePort {
       compareResolved.length === compareBrokenPrefix.length || nextChar === '/' || nextChar === '\\'
     if (hasBrokenPrefix && hasBoundaryAfterPrefix) {
       const suffix = resolved.slice(brokenPrefix.length).replace(/^[\\/]+/, '')
-      return path.join(homeDir, '.deepchat', suffix)
+      return path.join(getProductHomePath(homeDir), suffix)
     }
 
     return resolved
@@ -446,7 +448,7 @@ export class SkillService implements SkillServicePort {
     }
 
     const suffixParts = (match[1] ?? '').split('/').filter(Boolean)
-    return path.join(homeDir, '.deepchat', 'skills', ...suffixParts)
+    return path.join(getProductHomePath(homeDir), 'skills', ...suffixParts)
   }
 
   /**
@@ -4170,7 +4172,11 @@ export class SkillService implements SkillServicePort {
   private backupExistingSkill(skillName: string): string {
     const sourceDir = path.join(this.skillsDir, skillName)
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const backupRoot = path.join(app.getPath('home'), '.deepchat', 'backups', 'skill-installs')
+    const backupRoot = path.join(
+      getProductHomePath(app.getPath('home')),
+      'backups',
+      'skill-installs'
+    )
     fs.mkdirSync(backupRoot, { recursive: true })
     const backupDir = path.join(backupRoot, `${skillName}-${timestamp}-${randomUUID()}`)
     fs.renameSync(sourceDir, backupDir)
@@ -4245,7 +4251,11 @@ export class SkillService implements SkillServicePort {
   }
 
   private async cloneGitSkillRepo(repoUrl: string): Promise<string> {
-    const operationRoot = path.join(app.getPath('home'), '.deepchat', 'tmp', 'skill-installs')
+    const operationRoot = path.join(
+      getProductHomePath(app.getPath('home')),
+      'tmp',
+      'skill-installs'
+    )
     fs.mkdirSync(operationRoot, { recursive: true })
     const cloneDir = path.join(operationRoot, `${Date.now()}-${randomUUID()}`)
     try {
@@ -4755,7 +4765,11 @@ export class SkillService implements SkillServicePort {
     }
 
     const skillDir = path.resolve(metadata.skillRoot)
-    const backupRoot = path.join(app.getPath('home'), '.deepchat', 'backups', 'skill-deletes')
+    const backupRoot = path.join(
+      getProductHomePath(app.getPath('home')),
+      'backups',
+      'skill-deletes'
+    )
     fs.mkdirSync(backupRoot, { recursive: true })
     const backupDir = path.join(backupRoot, `${name}-${Date.now()}-${randomUUID()}`)
     const sessions = this.agentScopePort ? await this.agentScopePort.listSessions() : []

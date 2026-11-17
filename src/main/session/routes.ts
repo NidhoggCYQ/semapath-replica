@@ -66,6 +66,9 @@ import {
   sessionsSteerPendingInputRoute,
   sessionsTogglePinnedRoute,
   sessionsTranslateTextRoute,
+  sessionsGetComposerPredictionRoute,
+  sessionsGetMessageDeliveryTraceRoute,
+  sessionsRecordMessageDeliveryRoute,
   sessionsUpdateDisabledAgentToolsRoute,
   sessionsUpdateGenerationSettingsRoute,
   sessionsUpdateQueuedInputRoute
@@ -116,6 +119,8 @@ export type SessionRouteProjectionPort = SessionServiceProjectionPort &
   >
 
 export function createSessionRoutes(deps: {
+  deliveryTrace?: import('./messageDelivery').MessageDeliveryTrace
+  composerPrediction?: { get(sessionId: string, messageId: string): Promise<string | null> }
   lifecycle: SessionLifecyclePort
   projection: SessionRouteProjectionPort
   desktop: SessionServiceDesktopPort
@@ -392,7 +397,12 @@ export function createSessionRoutes(deps: {
       async (rawInput) => {
         const input = sessionsEditUserMessageRoute.input.parse(rawInput)
         return sessionsEditUserMessageRoute.output.parse({
-          message: await deps.turn.editUserMessage(input.sessionId, input.messageId, input.text)
+          message: await deps.turn.editUserMessage(
+            input.sessionId,
+            input.messageId,
+            input.text,
+            input.inlineItems
+          )
         })
       }
     ],
@@ -532,6 +542,53 @@ export function createSessionRoutes(deps: {
         return sessionsExportMessageTapeReplaySliceRoute.output.parse({
           slice: await deps.projection.exportMessageTapeReplaySlice(input.messageId, input.options)
         })
+      }
+    ],
+    [
+      sessionsGetMessageDeliveryTraceRoute.name,
+      async (rawInput) => {
+        const { messageId } = sessionsGetMessageDeliveryTraceRoute.input.parse(rawInput)
+        const message = await deps.projection.getMessage(messageId)
+        if (!message || !(await deps.projection.getSession(message.sessionId)))
+          throw new Error('Message not found')
+        const traces = await deps.projection.listMessageTraces(messageId)
+        let inherited = false
+        try {
+          inherited = JSON.parse(message.metadata || '{}').branchInherited === true
+        } catch {
+          /* old metadata */
+        }
+        return {
+          events: deps.deliveryTrace?.list(message.sessionId, messageId) ?? [],
+          requests: traces.map((r) => ({
+            requestSeq: r.requestSeq,
+            at: r.createdAt,
+            providerId: r.providerId,
+            modelId: r.modelId
+          })),
+          inherited
+        }
+      }
+    ],
+    [
+      sessionsRecordMessageDeliveryRoute.name,
+      async (rawInput, context) => {
+        requireRendererCaller(context)
+        const input = sessionsRecordMessageDeliveryRoute.input.parse(rawInput)
+        const message = await deps.projection.getMessage(input.messageId)
+        if (!message || message.sessionId !== input.sessionId || message.role !== 'assistant')
+          return { recorded: false }
+        deps.deliveryTrace?.record(input.sessionId, input.messageId, input.stage)
+        return { recorded: !!deps.deliveryTrace }
+      }
+    ],
+    [
+      sessionsGetComposerPredictionRoute.name,
+      async (rawInput) => {
+        const input = sessionsGetComposerPredictionRoute.input.parse(rawInput)
+        return {
+          suggestion: (await deps.composerPrediction?.get(input.sessionId, input.messageId)) ?? null
+        }
       }
     ],
     [
@@ -798,8 +855,9 @@ export function createSessionRoutes(deps: {
       chatSendMessageRoute.name,
       async (rawInput, context) => {
         const input = chatSendMessageRoute.input.parse(rawInput)
+        const receivedAt = Date.now()
         const caller = requireRendererCaller(context)
-        return chatSendMessageRoute.output.parse(
+        const result = chatSendMessageRoute.output.parse(
           await withSubmissionCancellation(
             caller.webContentsId,
             input.submissionId,
@@ -809,6 +867,9 @@ export function createSessionRoutes(deps: {
                 : await chatService.sendMessage(input.sessionId, input.content)
           )
         )
+        if (result.accepted && result.requestId)
+          deps.deliveryTrace?.accepted(input.sessionId, result.requestId, receivedAt)
+        return result
       }
     ],
     [

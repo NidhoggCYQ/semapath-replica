@@ -173,6 +173,7 @@ function createHarness(
   }
 
   return {
+    dependencies,
     coordinator: new SessionTurn(dependencies),
     records,
     sessions,
@@ -194,6 +195,15 @@ function createHarness(
 }
 
 describe('SessionTurn', () => {
+  it('validates analysis references before retry truncation and preserves the answer on rejection', async () => {
+    const h = createHarness()
+    const validate = vi.fn().mockRejectedValue(new Error('ANALYSIS_REFERENCE_STALE'))
+    const turn = new SessionTurn({ ...h.dependencies, validateAnalysisContexts: validate })
+    await expect(turn.retryMessage('s1', 'message-1')).rejects.toThrow('ANALYSIS_REFERENCE_STALE')
+    expect(h.transcript.commitRetryMessage).not.toHaveBeenCalled()
+    expect(h.send).not.toHaveBeenCalled()
+  })
+
   it('projects Queue resume availability only for DeepChat sessions', async () => {
     const deepchat = createHarness()
     const acp = createHarness({ kind: 'acp' })

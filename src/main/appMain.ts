@@ -1,4 +1,9 @@
-import { app, dialog } from 'electron'
+// SemaPath Replica modification: isolate application identity and Chromium state.
+import { app, BrowserWindow, dialog } from 'electron'
+import fs from 'node:fs'
+import path from 'node:path'
+import { PRODUCT_NAME } from '@shared/productIdentity'
+import { getProductUserDataPath } from './app/productPaths'
 import { StartupWorkloadCoordinator } from './app/startupWorkloadCoordinator'
 import { registerWorkspacePreviewSchemes } from './workspace/workspacePreviewProtocol'
 import { registerMcpAppScheme } from './mcp/apps/sandboxProtocol'
@@ -17,7 +22,7 @@ import { classifyMainLogError, type MainLogShutdownReason } from './logging/main
 import { elapsedMonotonicMs, readMonotonicNow } from './lib/monotonicTime'
 
 let appStarted = false
-const APP_NAME = 'DeepChat'
+const APP_NAME = PRODUCT_NAME
 
 export function startApp(): void {
   if (appStarted) {
@@ -25,12 +30,31 @@ export function startApp(): void {
   }
   appStarted = true
 
-  const e2eUserDataDir = process.env.DEEPCHAT_E2E_USER_DATA_DIR?.trim()
-  if (e2eUserDataDir) {
-    app.setPath('userData', e2eUserDataDir)
+  // Isolated desktop verification must never display windows or take the user's focus.
+  // Require both explicit test flags so ordinary application behavior is unaffected.
+  if (process.env.DEEPCHAT_E2E_USER_DATA_DIR && process.env.SEMAPATH_E2E_BACKGROUND === '1') {
+    app.focus = () => {}
+    for (const method of ['show', 'showInactive', 'focus', 'moveTop', 'flashFrame'] as const)
+      BrowserWindow.prototype[method] = () => {}
+    app.on('browser-window-created', (_event, window) => {
+      window.hide()
+      window.setFocusable(false)
+      window.webContents.setBackgroundThrottling(false)
+    })
   }
 
   app.setName(APP_NAME)
+  const userDataDirectory = getProductUserDataPath(
+    app.getPath('appData'),
+    process.env.DEEPCHAT_E2E_USER_DATA_DIR ?? process.env.SEMAPATH_REPLICA_DATA_DIR
+  )
+  const chromiumDirectory = path.join(userDataDirectory, 'chromium')
+  fs.mkdirSync(chromiumDirectory, { recursive: true })
+  app.setPath('userData', userDataDirectory)
+  app.setPath('sessionData', chromiumDirectory)
+  // Only this process and its children can discover the isolated CLI helper.
+  const cliDirectory = path.join(userDataDirectory, 'bin')
+  process.env.PATH = [cliDirectory, process.env.PATH ?? ''].filter(Boolean).join(path.delimiter)
   if (process.platform === 'darwin') {
     if (app.isReady()) {
       ensureRegularAppOnMac()

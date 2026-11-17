@@ -24,6 +24,11 @@ import type {
 } from './contracts'
 
 export interface SessionTurnDependencies {
+  validateAnalysisContexts?: (
+    sessionId: string,
+    input: SendMessageInput,
+    signal?: AbortSignal
+  ) => Promise<void> | void
   sessions: SessionTurnStorePort
   runtime: SessionTurnRuntimePort
   transcript: SessionTurnTranscriptPort
@@ -42,6 +47,7 @@ export class SessionTurn implements SessionTurnPort, SessionInitialTurnPort {
     const content = input.content
     if (!content.text.trim() && (content.files?.length ?? 0) === 0) return undefined
     input.signal?.throwIfAborted()
+    await this.dependencies.validateAnalysisContexts?.(input.sessionId, content, input.signal)
 
     try {
       const runtime = this.dependencies.runtime.resolveSession(toAppSessionId(input.sessionId))
@@ -120,6 +126,7 @@ export class SessionTurn implements SessionTurnPort, SessionInitialTurnPort {
     let session = this.requireSession(sessionId)
     const wasDraft = session.isDraft
     const normalizedInput = normalizeSendMessageInput(content)
+    await this.dependencies.validateAnalysisContexts?.(sessionId, normalizedInput, options?.signal)
 
     const runtime = this.dependencies.runtime.resolveSession(toAppSessionId(sessionId))
     const state = await runtime.snapshot()
@@ -183,6 +190,7 @@ export class SessionTurn implements SessionTurnPort, SessionInitialTurnPort {
   ): Promise<MessageStartResult> {
     const session = this.requireSession(sessionId)
     const normalizedInput = normalizeSendMessageInput(content)
+    await this.dependencies.validateAnalysisContexts?.(sessionId, normalizedInput, options?.signal)
 
     const runtime = this.dependencies.runtime.resolveSession(toAppSessionId(sessionId))
     const state = await runtime.snapshot()
@@ -351,6 +359,7 @@ export class SessionTurn implements SessionTurnPort, SessionInitialTurnPort {
     this.requireSession(sessionId)
     const runtime = this.dependencies.runtime.resolveSession(toAppSessionId(sessionId))
     const prepared = await this.dependencies.transcript.prepareRetryMessage(sessionId, messageId)
+    await this.dependencies.validateAnalysisContexts?.(sessionId, prepared.content)
     if (runtime.kind === 'acp') {
       // ACP re-creates the user message on send, so truncate from the source
       // user message (inclusive) to avoid a stale duplicate.
@@ -388,10 +397,13 @@ export class SessionTurn implements SessionTurnPort, SessionInitialTurnPort {
   async editUserMessage(
     sessionId: string,
     messageId: string,
-    text: string
+    text: string,
+    inlineItems?: SendMessageInput['inlineItems']
   ): Promise<ChatMessageRecord> {
     this.requireSession(sessionId)
-    return await this.dependencies.transcript.editUserMessage(sessionId, messageId, text)
+    return inlineItems === undefined
+      ? await this.dependencies.transcript.editUserMessage(sessionId, messageId, text)
+      : await this.dependencies.transcript.editUserMessage(sessionId, messageId, text, inlineItems)
   }
 
   async getSessionCompactionSnapshot(sessionId: string): Promise<SessionCompactionSnapshot> {

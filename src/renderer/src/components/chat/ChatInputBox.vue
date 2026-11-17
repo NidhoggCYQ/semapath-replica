@@ -53,6 +53,23 @@
       <span>{{ t('chat.attachments.preparing') }}</span>
     </div>
 
+    <div
+      v-if="showPrediction"
+      data-testid="composer-prediction"
+      class="flex min-w-0 flex-col gap-1 px-4 pb-3 text-sm text-foreground/75"
+      role="status"
+      aria-live="polite"
+    >
+      <button
+        type="button"
+        class="text-left break-words text-foreground hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+        data-testid="prediction-accept"
+        @click="acceptPrediction"
+      >
+        {{ prediction }}
+      </button>
+      <span class="text-xs">{{ t('chat.prediction.hint') }}</span>
+    </div>
     <slot name="toolbar" />
   </div>
 </template>
@@ -84,6 +101,8 @@ import { useChatInputFiles } from './composables/useChatInputFiles'
 import { useSkillsData } from '@/components/chat-input/composables/useSkillsData'
 import SessionSkillsIndicator from '@/components/chat-input/SessionSkillsIndicator.vue'
 import { SkillChip } from './nodes/skillChip'
+import { AnalysisContextNode } from '@/components/editor/AnalysisContextNode'
+import type { AnalysisContext } from '@shared/analysisInteraction'
 import { FileAttachment } from './nodes/fileAttachment'
 import { CommandForm } from './nodes/commandForm'
 import {
@@ -99,6 +118,8 @@ const SlashMention = Mention.extend({
 
 const props = withDefaults(
   defineProps<{
+    prediction?: string
+    predictionBlocked?: boolean
     modelValue?: string
     placeholder?: string
     sessionId?: string | null
@@ -116,6 +137,8 @@ const props = withDefaults(
     files?: MessageFile[]
   }>(),
   {
+    prediction: '',
+    predictionBlocked: false,
     modelValue: '',
     placeholder: '',
     sessionId: null,
@@ -143,10 +166,12 @@ const emit = defineEmits<{
   'pending-skills-change': [skills: string[]]
   'switch-vision-model': []
   'draft-change': []
+  'prediction-dismiss': []
   'toggle-voice-input': []
 }>()
 
 const isComposing = ref(false)
+const editorEmpty = ref(true)
 const fileInput = ref<HTMLInputElement>()
 const { t } = useI18n()
 const resolvedPlaceholder = computed(() => props.placeholder?.trim() || t('chat.input.placeholder'))
@@ -524,6 +549,7 @@ const editor = new VueEditor({
     Text,
     History,
     SkillChip,
+    AnalysisContextNode,
     FileAttachment,
     CommandForm,
     Mention.configure({
@@ -546,6 +572,9 @@ const editor = new VueEditor({
     })
   ],
   content: toEditorDoc(props.modelValue || ''),
+  onTransaction: ({ editor }) => {
+    editorEmpty.value = editor.isEmpty
+  },
   onUpdate: ({ editor, transaction }) => {
     const isInternalSync = Boolean(transaction.getMeta(CHAT_INPUT_SYNC_META) || isSyncingNodes)
     if (!isInternalSync) {
@@ -560,6 +589,7 @@ const editor = new VueEditor({
       return
     }
 
+    emit('prediction-dismiss')
     const text = getEditorText(editor)
     if (text !== (props.modelValue || '')) {
       emit('update:modelValue', text)
@@ -569,6 +599,27 @@ const editor = new VueEditor({
 })
 
 editorInstance = editor
+const showPrediction = computed(() =>
+  Boolean(
+    props.prediction &&
+    props.editable &&
+    !props.predictionBlocked &&
+    !props.isGenerating &&
+    !props.isAttachmentPreparationPending &&
+    !isComposing.value &&
+    !mentions.isSuggestionMenuOpen.value &&
+    !props.modelValue &&
+    editorEmpty.value &&
+    !props.files.length &&
+    !activeSkillNames.value.length
+  )
+)
+function acceptPrediction() {
+  if (!showPrediction.value) return
+  const value = props.prediction
+  emit('prediction-dismiss')
+  editor.chain().focus().insertContent({ type: 'text', text: value }).run()
+}
 
 // ── Watchers ───────────────────────────────────────────────────
 
@@ -686,6 +737,25 @@ function handleKeydown(e: KeyboardEvent) {
   if (isVoiceShortcut) {
     e.preventDefault()
     emit('toggle-voice-input')
+    return
+  }
+
+  if (
+    !isComposing.value &&
+    !e.isComposing &&
+    e.keyCode !== 229 &&
+    showPrediction.value &&
+    !mentions.shouldSuppressSubmit() &&
+    !e.ctrlKey &&
+    !e.metaKey &&
+    !e.altKey &&
+    !e.shiftKey &&
+    ['Tab', 'Escape'].includes(e.key)
+  ) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.key === 'Tab') acceptPrediction()
+    else emit('prediction-dismiss')
     return
   }
 
@@ -842,6 +912,16 @@ function getInlineItemsSnapshot(): UserMessageInlineItem[] {
         return
       }
 
+      if (node.type.name === 'analysisContext') {
+        inlineItems.push({
+          type: 'analysis',
+          offset,
+          contextId: node.attrs.contextId as string,
+          label: node.attrs.label as string
+        })
+        return
+      }
+
       if (node.type.name === 'fileAttachment') {
         inlineItems.push({
           type: 'file',
@@ -895,10 +975,28 @@ function focusInput() {
   setCaretToEnd(editor)
 }
 
+function insertAnalysisContext(context: AnalysisContext, question = ''): boolean {
+  if (!props.editable || editor.isDestroyed) return false
+  return editor
+    .chain()
+    .focus()
+    .insertContentAt(editor.state.doc.content.size - 1, [
+      { type: 'text', text: getEditorText(editor).trim() ? '\n' : ' ' },
+      {
+        type: 'analysisContext',
+        attrs: { contextId: context.id, label: context.label, kind: context.kind }
+      },
+      { type: 'text', text: ' ' + question }
+    ])
+    .scrollIntoView()
+    .run()
+}
+
 defineExpose({
   triggerAttach,
   insertRecognizedText,
   insertWorkspaceReference,
+  insertAnalysisContext,
   getInlineItemsSnapshot,
   getPendingSkillsSnapshot,
   consumePendingSkills,
@@ -911,6 +1009,20 @@ defineExpose({
 </script>
 
 <style scoped>
+:deep(.analysis-context-node) {
+  display: inline-block;
+  max-width: min(360px, 90%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  padding: 1px 5px;
+  margin-inline: 2px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--analysis-blue, var(--primary));
+  background: var(--accent);
+}
 :deep(.chat-input-editor .tiptap p.is-editor-empty:first-child::before) {
   color: var(--muted-foreground);
   content: attr(data-placeholder);

@@ -1,12 +1,13 @@
 import { createHash } from 'crypto'
-import os from 'os'
+// SemaPath Replica modification: offload files belong to the replica profile.
+import { getProductHomePath } from '@/app/productPaths'
 import path from 'path'
 
 const INVALID_WINDOWS_SEGMENT_CHARS = new Set(['<', '>', ':', '"', '/', '\\', '|', '?', '*'])
 const TRAILING_WINDOWS_SEGMENT_CHARS = /[. ]+$/g
 
 export function getSessionsRoot(): string {
-  return path.resolve(os.homedir(), '.deepchat', 'sessions')
+  return path.resolve(getProductHomePath(), 'sessions')
 }
 
 export function resolveSessionDir(conversationId: string): string | null {

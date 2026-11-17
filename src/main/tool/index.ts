@@ -24,6 +24,7 @@ import type { PermissionMode, SessionKind } from '@shared/types/agent-interface'
 import { resolveToolOffloadTemplatePath } from '@/agent/shared/storage/sessionPaths'
 import { QUESTION_TOOL_NAME } from '@/tool/agentTools/questionTool'
 import { ToolMapper, type ToolSource } from './toolMapper'
+import { ANALYSIS_TOOL_NAMES } from '@shared/analysisWorkspace'
 import {
   CRON_JOB_AGENT_TOOL_NAME,
   LIVE_DELEGATION_AGENT_TOOL_NAME,
@@ -172,6 +173,7 @@ const MINIMAL_EDITOR_REQUIRED_AGENT_TOOLS = ['read', 'write', 'edit'] as const
 const OFFLOAD_TOOL_NAMES = new Set(['exec', 'cdp_send'])
 const UNSAFE_CODE_MODE_TOOL_NAMES = new Set(['__proto__', 'constructor', 'prototype'])
 const RESERVED_AGENT_TOOL_NAMES = new Set<string>([
+  ...ANALYSIS_TOOL_NAMES,
   ...YO_BROWSER_TOOL_NAMES,
   IMAGE_GENERATE_TOOL_NAME,
   UPDATE_PLAN_TOOL_NAME,
@@ -967,6 +969,7 @@ export class ToolService implements ToolServicePort {
         {
           toolCallId: request.id,
           runId: options?.runId,
+          messageId: options?.messageId,
           requestSeq: options?.requestSeq,
           manifestHash: options?.manifestHash,
           tapeIncarnationId: options?.tapeIncarnationId,

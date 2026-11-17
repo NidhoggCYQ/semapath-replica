@@ -31,7 +31,7 @@ const WINDOWS_PACKAGED_EXECUTABLE = resolve(
   REPO_ROOT,
   'dist',
   arch() === 'arm64' ? 'win-arm64-unpacked' : 'win-unpacked',
-  'DeepChat.exe'
+  'SemaPathReplicaDev.exe'
 )
 const MAX_MAIN_LOG_ATTACHMENT_BYTES = 512 * 1024
 const APP_CLOSE_TIMEOUT_MS = 10_000
@@ -278,6 +278,11 @@ export const test = base.extend<ElectronFixtures>({
       launchCount += 1
       const currentLaunch = launchCount
       const packaged = process.env.DEEPCHAT_E2E_APP_MODE === 'packaged'
+      const background = process.env.SEMAPATH_E2E_BACKGROUND === '1'
+      if (packaged && !background && process.env.SEMAPATH_E2E_VISIBLE !== '1')
+        throw new Error(
+          'Packaged E2E requires an explicitly verified background build or visible session.'
+        )
 
       const electronApp = await electron.launch({
         ...(packaged
@@ -291,7 +296,26 @@ export const test = base.extend<ElectronFixtures>({
         cwd: REPO_ROOT,
         env: {
           ...process.env,
-          DEEPCHAT_E2E_USER_DATA_DIR: userDataDir
+          ...(packaged
+            ? {
+                NODE_PATH: '',
+                PATH: [
+                  dirname(resolvePackagedExecutable()),
+                  join(process.env.SystemRoot ?? 'C:\\Windows', 'System32'),
+                  process.env.SystemRoot ?? 'C:\\Windows',
+                  join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'Wbem'),
+                  join(
+                    process.env.SystemRoot ?? 'C:\\Windows',
+                    'System32',
+                    'WindowsPowerShell',
+                    'v1.0'
+                  )
+                ].join(process.platform === 'win32' ? ';' : ':')
+              }
+            : {}),
+          DEEPCHAT_E2E_USER_DATA_DIR: userDataDir,
+          SEMAPATH_E2E_BACKGROUND: '1',
+          SEMAPATH_REPLICA_HOME: join(userDataDir, 'replica-home')
         },
         timeout: 120_000
       })
@@ -336,6 +360,34 @@ export const test = base.extend<ElectronFixtures>({
         const page = await waitForMainAppWindow(electronApp)
         attachPageListeners(page, `main-${currentLaunch}`)
         await page.waitForLoadState('domcontentloaded')
+        if (packaged && background) {
+          // CDP full-page screenshots can wait forever for a hidden packaged window's frame.
+          // Electron's native capture explicitly keeps the window hidden and wakes rendering.
+          page.screenshot = (async (options = {}) => {
+            const encoded = await electronApp.evaluate(async ({ BrowserWindow }, url) => {
+              const window = BrowserWindow.getAllWindows().find(
+                (item) => item.webContents.getURL() === url
+              )
+              if (!window) throw new Error('Screenshot window is missing')
+              const captured = await window.webContents.capturePage(undefined, {
+                stayHidden: true,
+                stayAwake: true
+              })
+              if (captured.isEmpty()) throw new Error('Background screenshot is empty')
+              return captured.toPNG().toString('base64')
+            }, page.url())
+            const png = Buffer.from(encoded, 'base64')
+            if (options.path) writeFileSync(options.path, png)
+            return png
+          }) as Page['screenshot']
+        }
+        if (!packaged || background) {
+          const visibleWindows = await electronApp.evaluate(
+            ({ BrowserWindow }) =>
+              BrowserWindow.getAllWindows().filter((window) => window.isVisible()).length
+          )
+          if (visibleWindows !== 0) throw new Error('Background E2E window became visible')
+        }
         app.page = page
         return app
       } catch (error) {

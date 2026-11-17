@@ -1,3 +1,6 @@
+// SemaPath Replica modification: support the replica scheme; keep explicit legacy imports.
+import { PRODUCT_PROTOCOL } from '@shared/productIdentity'
+
 const STARTUP_DEEPLINK_ENV_KEY = 'STARTUP_DEEPLINK'
 const SECONDARY_STARTUP_ENV_KEYS = ['DEEPLINK_URL', 'deepchat_deeplink'] as const
 let pendingStartupDeepLink: string | null = null
@@ -8,7 +11,7 @@ export const isDeepLinkUrl = (value: string | null | undefined): value is string
   }
 
   const normalized = value.trim()
-  return normalized.startsWith('deepchat://') || normalized.startsWith('deepchat:')
+  return normalized.startsWith(`${PRODUCT_PROTOCOL}:`) || normalized.startsWith('deepchat:')
 }
 
 export const normalizeDeepLinkUrl = (value: string): string => value.trim()

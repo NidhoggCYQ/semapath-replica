@@ -223,6 +223,74 @@ const blockedSummary = (): AttachmentPreparationSummary => ({
 })
 
 describe('useComposerSubmit attachment preflight', () => {
+  it('removes an accepted reference draft from persistent storage before a possible immediate exit', async () => {
+    const harness = createHarness()
+    harness.actions.message.value = '核对'
+    harness.inlineItems.value = [
+      { type: 'analysis', contextId: 'owned-context', label: '金额', offset: 0 }
+    ]
+    harness.document.value = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'analysisContext',
+              attrs: { contextId: 'owned-context', label: '金额', kind: 'data' }
+            },
+            { type: 'text', text: '核对' }
+          ]
+        }
+      ]
+    }
+    harness.actions.recordComposerDocumentChange()
+    expect(JSON.stringify(loadComposerDraftFromStorage('s1'))).toContain('analysisContext')
+    await harness.actions.onSubmit()
+    expect(JSON.stringify(loadComposerDraftFromStorage('s1'))).not.toContain('analysisContext')
+    harness.stop()
+  })
+  it('preserves the last rich draft when the editor handle disappears during view teardown', () => {
+    const harness = createHarness()
+    harness.actions.message.value = '核对'
+    harness.document.value = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'analysisContext',
+              attrs: { contextId: 'owned-context', label: '销售额', kind: 'data' }
+            },
+            { type: 'text', text: '核对' }
+          ]
+        }
+      ]
+    }
+    harness.actions.recordComposerDocumentChange()
+    expect(loadComposerDraftFromStorage('s1')?.document).toEqual(harness.document.value)
+    harness.chatInputRef.value = null
+    harness.stop()
+    expect(loadComposerDraftFromStorage('s1')?.document).toEqual(harness.document.value)
+  })
+  it('keeps reference offsets valid when leading and trailing whitespace are trimmed for dispatch', async () => {
+    const harness = createHarness()
+    harness.actions.message.value = '  核对  '
+    harness.inlineItems.value = [
+      { type: 'analysis', contextId: 'owned-context', label: '销售额', offset: 0 },
+      { type: 'analysis', contextId: 'owned-context-2', label: '明细', offset: 5 }
+    ]
+    await harness.actions.onSubmit()
+    expect(harness.chatClient.sendMessage.mock.calls[0]?.[1]).toMatchObject({
+      text: '核对',
+      inlineItems: [
+        { type: 'analysis', contextId: 'owned-context', label: '销售额', offset: 0 },
+        { type: 'analysis', contextId: 'owned-context-2', label: '明细', offset: 2 }
+      ]
+    })
+    harness.stop()
+  })
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()

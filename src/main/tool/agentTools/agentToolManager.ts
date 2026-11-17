@@ -10,6 +10,11 @@ import type { SettingsStore } from '@/config/settingsStore'
 import type { AgentToolProgressUpdate, ToolPermissionLeaseCapability } from '@shared/types/tool'
 import { toDeepChatJsonSchema } from '@shared/lib/zodJsonSchema'
 import { z } from 'zod'
+import {
+  FileExecutionInputsSchema,
+  type FileExecutionInput,
+  type FileExecutionPreparation
+} from '@shared/analysisFileExecution'
 import fs from 'fs'
 import path from 'path'
 import { app, nativeImage } from 'electron'
@@ -345,6 +350,15 @@ export class AgentToolManager {
     [GLOB_TOOL_NAME]: FffGlobArgsSchema,
     [GREP_TOOL_NAME]: FffGrepArgsSchema,
     exec: z.object({
+      fileInputs: FileExecutionInputsSchema.optional().describe(
+        'Registered input files for table analysis: use sourceId from datasource_context, with known sheet/range. Actual local paths are supplied in PBI_INPUTS_PATH.'
+      ),
+      fileOutput: z
+        .enum(['table', 'log'])
+        .optional()
+        .describe(
+          'Use table for captured analysis results, log for non-tabular commands. Table mode requires fileInputs and remains attached/cancellable. Write complete UTF-8 JSON tables to PBI_RESULT_PATH; stdout is only logs.'
+        ),
       command: z.string().min(1).describe('The shell command to execute'),
       stdin: z
         .string()
@@ -647,6 +661,12 @@ export class AgentToolManager {
     appendDefinitions(this.getQuestionToolDefinitions(), 'user-configurable')
 
     // 2.1. Progress checklist tool (deepchat regular sessions only)
+    if (isAgentMode && this.dependencies.analysis) {
+      appendDefinitions(
+        await this.dependencies.analysis.definitions(context.conversationId),
+        'user-configurable'
+      )
+    }
     if (isAgentMode) {
       appendDefinitions([this.planTool.getToolDefinition()], 'user-configurable')
     }
@@ -811,6 +831,14 @@ export class AgentToolManager {
     conversationId?: string,
     options?: AgentToolExecutionOptions
   ): Promise<AgentToolCallResult | string> {
+    if (this.dependencies.analysis?.has(toolName)) {
+      return this.dependencies.analysis.call(toolName, args, conversationId, {
+        toolCallId: options?.toolCallId,
+        messageId: options?.messageId,
+        signal: options?.signal,
+        beforeDispatch: this.createAgentDispatchCommit(toolName, 'semapath-analysis', args, options)
+      })
+    }
     if (toolName === UPDATE_PLAN_TOOL_NAME) {
       return this.planTool.call(args, conversationId, {
         toolCallId: options?.toolCallId,
@@ -1195,7 +1223,7 @@ export class AgentToolManager {
         function: {
           name: 'exec',
           description:
-            'Execute a shell command in the current working directory or an explicit cwd. External cwd paths are allowed in Full Access mode; default mode asks for approval. Use background: true when you know the command should detach immediately. Otherwise foreground exec waits briefly, and long-running commands may auto-background and return a session ID for use with the process tool.',
+            'Execute a shell command under existing command permissions. For Excel analysis load the xlsx skill when available, then set fileInputs and fileOutput="table", read actual files from PBI_INPUTS_PATH and write complete JSON tables to PBI_RESULT_PATH. Check tableDelivery before using results; logs are not complete tables, and recorded output is not business verification. Table mode stays attached and cancellable, forbids background/yieldMs/Programmatic stdin, and never automatically reruns failed commands. Other commands may background and return a process session ID as before.',
           parameters: {
             ...execParameters,
             properties: execProviderProperties
@@ -1474,6 +1502,8 @@ export class AgentToolManager {
           cwd?: string
           background?: boolean
           yieldMs?: number
+          fileInputs?: FileExecutionInput[]
+          fileOutput?: 'table' | 'log'
         }
         const isProgrammaticInvocation = options.programmaticToolParent !== undefined
         if (isProgrammaticInvocation) {
@@ -1512,35 +1542,121 @@ export class AgentToolManager {
         if (isProgrammaticInvocation) {
           options.signal?.throwIfAborted()
         }
-        const commandResult = await bashHandler.executeCommand(
-          {
-            command: execArgs.command,
-            timeout: execArgs.timeoutMs,
-            description: execArgs.description ?? 'Execute command',
-            cwd: execArgs.cwd,
-            background: execArgs.background,
-            yieldMs: execArgs.yieldMs
-          },
-          {
-            conversationId,
-            commandShell: options.commandShell,
-            oneShotCommandGrantId: options.oneShotCommandGrantId,
-            stdin: execArgs.stdin,
-            programmatic: isProgrammaticInvocation,
-            signal: isProgrammaticInvocation ? options.signal : undefined,
-            maxTimeoutMs: isProgrammaticInvocation
-              ? options.programmaticToolCapability?.quotas.maxDurationMs
-              : undefined,
-            allowExternalCwd: allowExternalFileAccess,
-            outputPreviewChars: outputLimits.commandOutputInlineChars,
-            beforeExecute: this.createAgentDispatchCommit(
-              toolName,
-              'agent-filesystem',
-              parsedArgs,
-              options
+        const captureTables =
+          execArgs.fileOutput === 'table' ||
+          (execArgs.fileOutput !== 'log' && !!execArgs.fileInputs?.length)
+        const fileExecution = this.dependencies.analysis?.fileExecution
+        let preparation: FileExecutionPreparation | undefined
+        if (captureTables) {
+          if (
+            !fileExecution ||
+            !conversationId ||
+            !options.messageId ||
+            !options.toolCallId ||
+            !execArgs.fileInputs?.length ||
+            execArgs.background ||
+            execArgs.yieldMs !== undefined ||
+            isProgrammaticInvocation ||
+            execArgs.stdin !== undefined
+          )
+            throw new Error(
+              'Table analysis requires registered fileInputs, an owning task, and an attached exec without background, yieldMs or Programmatic stdin.'
             )
+          preparation = await fileExecution.prepare(
+            {
+              sessionId: conversationId,
+              messageId: options.messageId,
+              toolCallId: options.toolCallId,
+              command: execArgs.command,
+              cwd: bashHandler.resolveWorkingDirectory(
+                execArgs.cwd,
+                options.commandShell,
+                allowExternalFileAccess
+              ),
+              inputs: execArgs.fileInputs,
+              activeSkillNames: options.activeSkillNames ?? []
+            },
+            options.signal
+          )
+          if (preparation.cached) {
+            const content = JSON.stringify({ tableDelivery: preparation.cached, replayed: true })
+            return { content, rawData: { content, isError: preparation.cached.state !== 'ready' } }
           }
+        }
+        const commit = this.createAgentDispatchCommit(
+          toolName,
+          'agent-filesystem',
+          parsedArgs,
+          options
         )
+        let commandResult: Awaited<ReturnType<AgentBashHandler['executeCommand']>>
+        try {
+          commandResult = await bashHandler.executeCommand(
+            {
+              command: execArgs.command,
+              timeout: execArgs.timeoutMs,
+              description: execArgs.description ?? 'Execute command',
+              cwd: execArgs.cwd,
+              background: execArgs.background,
+              yieldMs: execArgs.yieldMs
+            },
+            {
+              conversationId,
+              commandShell: options.commandShell,
+              oneShotCommandGrantId: options.oneShotCommandGrantId,
+              stdin: execArgs.stdin,
+              programmatic: isProgrammaticInvocation,
+              signal: isProgrammaticInvocation || captureTables ? options.signal : undefined,
+              awaitCompletion: captureTables,
+              env: preparation?.env,
+              maxTimeoutMs: isProgrammaticInvocation
+                ? options.programmaticToolCapability?.quotas.maxDurationMs
+                : captureTables
+                  ? 120000
+                  : undefined,
+              allowExternalCwd: allowExternalFileAccess,
+              outputPreviewChars: outputLimits.commandOutputInlineChars,
+              beforeExecute: (normalized) => {
+                const armed = commit?.({
+                  ...normalized,
+                  ...(captureTables ? { fileInputs: execArgs.fileInputs, fileOutput: 'table' } : {})
+                })
+                if (preparation) fileExecution!.started(conversationId!, preparation.id)
+                return armed
+              }
+            }
+          )
+        } catch (error) {
+          // Permission requests have not launched a command; keep preparation for the approved retry.
+          if (preparation && !(error instanceof CommandPermissionRequiredError))
+            fileExecution!.failed(
+              conversationId!,
+              preparation.id,
+              options.signal?.aborted ? 'cancelled' : 'launch_failed'
+            )
+          throw error
+        }
+        if (preparation) {
+          const tableDelivery = await fileExecution!.finish(
+            conversationId!,
+            preparation.id,
+            {
+              exitCode: commandResult.exitCode ?? null,
+              timedOut: commandResult.timedOut ?? false
+            },
+            options.signal
+          )
+          const content = JSON.stringify({ logs: commandResult.output, tableDelivery })
+          return {
+            content,
+            rawData: {
+              content,
+              toolResult: { tableDelivery },
+              isError: tableDelivery.state !== 'ready',
+              outputOffloadPath: commandResult.outputOffloadPath
+            }
+          }
+        }
         const content =
           typeof commandResult.output === 'string'
             ? commandResult.output

@@ -33,9 +33,12 @@
       >
         <span>{{ t('chat.topbar.backToParent') }}</span>
       </DcButton>
-      <div v-if="project" class="flex items-center gap-1.5 text-muted-foreground">
+      <div
+        v-if="project"
+        class="flex min-w-0 max-w-[45%] items-center gap-1.5 text-muted-foreground"
+      >
         <Icon icon="lucide:folder" class="w-3.5 h-3.5 shrink-0" />
-        <span class="text-xs truncate">{{ projectName }}</span>
+        <span class="min-w-0 truncate text-xs" :title="project">{{ projectName }}</span>
         <Icon icon="lucide:chevron-right" class="w-3 h-3 shrink-0" />
       </div>
       <div v-if="isReadOnly" class="min-w-0 flex-1">
@@ -292,7 +295,13 @@ const showCollapsedNewChatButton = computed(
   () => sidebarStore.collapsed && Boolean(sessionStore.newConversationTargetAgentId)
 )
 
-const projectName = computed(() => props.project.split('/').pop() ?? props.project)
+const projectName = computed(
+  () =>
+    props.project
+      .replace(/[\\/]+$/, '')
+      .split(/[\\/]/)
+      .pop() || props.project
+)
 const currentSession = computed(
   () => sessionStore.sessions.find((session) => session.id === props.sessionId) ?? null
 )

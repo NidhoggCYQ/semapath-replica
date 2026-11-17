@@ -1,3 +1,5 @@
+// SemaPath Replica modification: never claim the upstream protocol handler.
+import { PRODUCT_PROTOCOL } from '@shared/productIdentity'
 import logger from '@shared/logger'
 import { app } from 'electron'
 import type { MCPServerConfig } from '@shared/types/mcp'
@@ -70,15 +72,18 @@ export class DeeplinkService {
       this.startupUrl = startupDeepLinkUrl
     }
 
+    // Development starts do not change operating-system protocol associations.
+    if (!app.isPackaged && process.env.SEMAPATH_REGISTER_PROTOCOL !== '1') return
+
     // 注册协议处理器
     if (process.defaultApp) {
       if (process.argv.length >= 2) {
-        app.setAsDefaultProtocolClient('deepchat', process.execPath, [
+        app.setAsDefaultProtocolClient(PRODUCT_PROTOCOL, process.execPath, [
           path.resolve(process.argv[1])
         ])
       }
     } else {
-      app.setAsDefaultProtocolClient('deepchat')
+      app.setAsDefaultProtocolClient(PRODUCT_PROTOCOL)
     }
   }
 
@@ -110,7 +115,7 @@ export class DeeplinkService {
       const urlObj = new URL(url)
       logger.info('Received DeepLink:', this.redactDeepLinkUrlForLog(url))
 
-      if (urlObj.protocol !== 'deepchat:') {
+      if (urlObj.protocol !== `${PRODUCT_PROTOCOL}:` && urlObj.protocol !== 'deepchat:') {
         console.error('Unsupported protocol:', urlObj.protocol)
         return
       }

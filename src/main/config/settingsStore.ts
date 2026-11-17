@@ -1,3 +1,5 @@
+// SemaPath Replica modification: keep Skills and installation state isolated.
+import { getProductHomePath } from '@/app/productPaths'
 import type { SettingsDatabase } from '@/settings/data/database'
 import { AppSettingsDbBackedStore } from '@/settings/appSettingsDbStore'
 import type { StoreLike } from '@/config/storeLike'
@@ -32,7 +34,7 @@ export function createSettingsStore(): SettingsStore {
         fontFamily: '',
         codeFontFamily: '',
         default_system_prompt: '',
-        skillsPath: path.join(app.getPath('home'), '.deepchat', 'skills'),
+        skillsPath: path.join(getProductHomePath(app.getPath('home')), 'skills'),
         enableSkills: true,
         skillDraftSuggestionsEnabled: false,
         appVersion: app.getVersion(),

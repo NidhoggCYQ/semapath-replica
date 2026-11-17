@@ -1,3 +1,8 @@
+import {
+  defaultComposerPredictionSettings,
+  type ComposerPredictionSettings,
+  type ComposerPredictionStatus
+} from '@shared/composerPrediction'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { defineStore } from 'pinia'
 import type { SettingsChange, SettingsSnapshotValues } from '@shared/contracts/routes'
@@ -27,6 +32,12 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
   const isLoadingFonts = ref(false)
   const artifactsEffectEnabled = ref(false)
   const autoScrollEnabled = ref(true)
+  const composerPredictionsEnabled = ref(true)
+  const composerPredictionSettings = ref<ComposerPredictionSettings>(
+    defaultComposerPredictionSettings()
+  )
+  const composerPredictionStatus = ref<ComposerPredictionStatus>(null)
+  const composerPredictionRevision = ref(0)
   const contentProtectionEnabled = ref(false)
   const privacyModeEnabled = ref(false)
   const copyWithCotEnabled = ref(true)
@@ -52,6 +63,14 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
   )
 
   const applySettingsValues = (values: Partial<SettingsSnapshotValues>) => {
+    if (typeof values.composerPredictionsEnabled === 'boolean')
+      composerPredictionsEnabled.value = values.composerPredictionsEnabled
+    if (values.composerPredictionSettings)
+      composerPredictionSettings.value = values.composerPredictionSettings
+    if ('composerPredictionStatus' in values)
+      composerPredictionStatus.value = values.composerPredictionStatus ?? null
+    if (typeof values.composerPredictionRevision === 'number')
+      composerPredictionRevision.value = values.composerPredictionRevision
     if (typeof values.fontSizeLevel === 'number') {
       fontSizeLevel.value = clampFontSizeLevel(values.fontSizeLevel)
     }
@@ -382,6 +401,14 @@ export const useUiSettingsStore = defineStore('uiSettings', () => {
   })
 
   return {
+    composerPredictionsEnabled,
+    composerPredictionSettings,
+    composerPredictionStatus,
+    composerPredictionRevision,
+    setComposerPredictionsEnabled: (value: boolean) =>
+      updateSettings([{ key: 'composerPredictionsEnabled', value }]),
+    setComposerPredictionSettings: (value: ComposerPredictionSettings) =>
+      updateSettings([{ key: 'composerPredictionSettings', value }]),
     fontSizeLevel,
     fontSizeClass,
     fontFamily,

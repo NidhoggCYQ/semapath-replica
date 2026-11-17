@@ -1,4 +1,12 @@
 import Database from 'better-sqlite3-multiple-ciphers'
+import { AnalysisTasksTable } from '@/analysis/data/analysisTasks'
+import {
+  AnalysisSessionsTable,
+  AnalysisToolOperationsTable
+} from '@/analysis/data/analysisWorkspace'
+import { AnalysisReportsTable } from '@/analysis/data/analysisReports'
+import { FileExecutionsTable } from '@/analysis/data/fileExecutions'
+import { AnalysisContextsTable, AnalysisUiTable } from '@/analysis/data/analysisInteraction'
 import { AGENT_MEMORY_SCOPE_ID_MAX_CHARS } from '@shared/types/agent-memory'
 import { ConversationsTable } from '@/session/data/tables/conversations'
 import { MessagesTable } from '@/session/data/tables/messages'
@@ -75,6 +83,16 @@ function normalizeDeclaredType(type: string | null | undefined): string | null {
 }
 
 const CATALOG_DEFINITIONS: CatalogDefinition[] = [
+  { name: 'replica_file_executions', createTable: (db) => new FileExecutionsTable(db) },
+  { name: 'replica_analysis_contexts', createTable: (db) => new AnalysisContextsTable(db) },
+  { name: 'replica_analysis_ui', createTable: (db) => new AnalysisUiTable(db) },
+  { name: 'replica_analysis_tasks', createTable: (db) => new AnalysisTasksTable(db) },
+  { name: 'replica_analysis_reports', createTable: (db) => new AnalysisReportsTable(db) },
+  { name: 'replica_analysis_sessions', createTable: (db) => new AnalysisSessionsTable(db) },
+  {
+    name: 'replica_analysis_tool_operations',
+    createTable: (db) => new AnalysisToolOperationsTable(db)
+  },
   {
     name: 'conversations',
     createTable: (db) => new ConversationsTable(db),
@@ -503,6 +521,8 @@ export function createMainSchemaCatalog(db: Database.Database): MainSchemaCatalo
   const liveDelegationEvents = new LiveDelegationEventsTable(db)
 
   const createTables: BaseTable[] = [
+    new AnalysisTasksTable(db),
+    new AnalysisReportsTable(db),
     acpSessions,
     acpTurns,
     environments,

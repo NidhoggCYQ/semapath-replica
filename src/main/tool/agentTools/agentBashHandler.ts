@@ -58,6 +58,7 @@ export interface ExecuteCommandOptions {
   outputPrefix?: string
   outputPreviewChars?: number
   allowExternalCwd?: boolean
+  awaitCompletion?: boolean
   beforeExecute?: (
     normalizedArguments: Record<string, unknown>
   ) => ArmedAgentCliProgrammaticToken | void
@@ -162,6 +163,8 @@ export class AgentBashHandler {
     rtkMode: 'rewrite' | 'direct' | 'bypass'
     rtkFallbackReason?: string
     outputOffloadPath?: string
+    exitCode?: number | null
+    timedOut?: boolean
   }> {
     const parsed = ExecuteCommandArgsSchema.safeParse(args)
     if (!parsed.success) {
@@ -170,7 +173,7 @@ export class AgentBashHandler {
 
     const { command, timeout, background, cwd: requestedCwd, yieldMs } = parsed.data
     const isProgrammaticInvocation = options.programmatic === true
-    if (isProgrammaticInvocation) {
+    if (isProgrammaticInvocation || options.awaitCompletion === true) {
       options.signal?.throwIfAborted()
     }
     if (
@@ -237,9 +240,11 @@ export class AgentBashHandler {
       command,
       resolvedEnvironment.env,
       options.commandShell,
-      resolvedEnvironment.preserveCommand || isProgrammaticInvocation
+      resolvedEnvironment.preserveCommand ||
+        isProgrammaticInvocation ||
+        options.awaitCompletion === true
     )
-    if (isProgrammaticInvocation) {
+    if (isProgrammaticInvocation || options.awaitCompletion === true) {
       options.signal?.throwIfAborted()
     }
 
@@ -351,7 +356,9 @@ export class AgentBashHandler {
       rtkApplied: prepared.rtkApplied,
       rtkMode: prepared.rtkMode,
       rtkFallbackReason: prepared.rtkFallbackReason,
-      outputOffloadPath: result.offloaded ? result.outputFilePath : undefined
+      outputOffloadPath: result.offloaded ? result.outputFilePath : undefined,
+      exitCode: result.exitCode,
+      timedOut: result.timedOut
     }
   }
 
@@ -373,7 +380,7 @@ export class AgentBashHandler {
     })
   }
 
-  private resolveWorkingDirectory(
+  resolveWorkingDirectory(
     requestedCwd: string | undefined,
     commandShell: ResolvedCommandShell,
     allowExternalCwd = false
@@ -449,7 +456,8 @@ export class AgentBashHandler {
       removal ??= backgroundExecSessionManager.remove(conversationId, session.sessionId)
       return removal
     }
-    const signal = options.programmatic === true ? options.signal : undefined
+    const signal =
+      options.programmatic === true || options.awaitCompletion === true ? options.signal : undefined
     let removeAbortListener = () => {}
     const abortObserved = signal
       ? new Promise<void>((resolve) => {
@@ -500,7 +508,9 @@ export class AgentBashHandler {
 
     try {
       const yielded =
-        options.stdin === undefined && options.programmatic !== true
+        options.stdin === undefined &&
+        options.programmatic !== true &&
+        options.awaitCompletion !== true
           ? await backgroundExecSessionManager.waitForCompletionOrYield(
               conversationId,
               session.sessionId,
@@ -557,7 +567,7 @@ export class AgentBashHandler {
         }
       }
     } catch (error) {
-      if (options.programmatic === true) {
+      if (options.programmatic === true || options.awaitCompletion === true) {
         await removeSession().catch((cause) => {
           logger.warn('[AgentBashHandler] Failed to cleanup failed Programmatic command', {
             conversationId,

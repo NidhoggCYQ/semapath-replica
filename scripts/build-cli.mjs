@@ -45,7 +45,7 @@ export const WINDOWS_LAUNCHER = `@echo off\r
 setlocal\r
 set "cli_module=%~dp0deepchat.mjs"\r
 set "electron_host=%~dp0..\\..\\node_modules\\electron\\dist\\electron.exe"\r
-if not exist "%electron_host%" set "electron_host=%~dp0..\\..\\..\\DeepChat.exe"\r
+if not exist "%electron_host%" set "electron_host=%~dp0..\\..\\..\\SemaPathReplicaDev.exe"\r
 if not exist "%electron_host%" set "electron_host=%~dp0..\\..\\..\\DeepChat"\r
 if not exist "%electron_host%" goto missing_runtime\r
 if exist "%electron_host%\\" goto missing_runtime\r

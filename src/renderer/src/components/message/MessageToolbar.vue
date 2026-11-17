@@ -2,10 +2,10 @@
   <template v-if="!isCapturingImage">
     <TooltipProvider :ignore-non-keyboard-focus="true">
       <div
-        class="message-toolbar w-full h-7 text-xs text-muted-foreground items-center justify-between flex flex-row opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-[var(--dc-motion-fast)] ease-[var(--dc-ease-out-soft)]"
+        class="message-toolbar w-full min-h-7 text-xs text-muted-foreground items-center justify-between flex flex-row flex-wrap gap-y-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition-opacity duration-[var(--dc-motion-fast)] ease-[var(--dc-ease-out-soft)]"
         :class="[isAssistant ? '' : 'flex-row-reverse']"
       >
-        <span v-show="!loading" class="flex flex-row gap-3">
+        <span v-show="!loading" class="flex min-w-0 flex-row flex-wrap gap-x-3 gap-y-1">
           <!-- Edit mode buttons (save/cancel) -->
           <template v-if="isEditMode">
             <DcButton
@@ -115,6 +115,16 @@
               :tooltip-delay-duration="200"
               class="text-muted-foreground hover:text-primary hover:bg-transparent transition-colors duration-[var(--dc-motion-fast)] ease-[var(--dc-ease-out-soft)]"
               @click="emit('retry')"
+            />
+            <DcButton
+              v-if="isAssistant && traceDebugEnabled"
+              variant="ghost"
+              size="icon-sm"
+              icon="lucide:route"
+              :tooltip="t('chat.delivery.title')"
+              data-testid="message-delivery-action"
+              class="text-muted-foreground hover:text-primary"
+              @click="emit('deliveryTrace')"
             />
             <DcButton
               v-if="isAssistant && traceDebugEnabled && allowTrace"
@@ -299,6 +309,7 @@ const emit = defineEmits<{
   (e: 'fork'): void
   (e: 'copyImageFromTop'): void
   (e: 'trace'): void
+  (e: 'deliveryTrace'): void
   (e: 'tapeInspector'): void
   (e: 'memory'): void
 }>()

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeAll, beforeEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, inject, ref, nextTick } from 'vue'
 import { CHAT_INPUT_WORKSPACE_ITEM_MIME } from '@/lib/chatInputWorkspaceReference'
@@ -242,6 +242,10 @@ vi.mock('vue-i18n', () => ({
 }))
 
 describe('ChatInputBox attachments', () => {
+  // Editor dependency loading belongs to fixture setup, outside interaction-test deadlines.
+  beforeAll(async () => {
+    await import('@/components/chat/ChatInputBox.vue')
+  }, 30000)
   beforeEach(() => {
     vi.clearAllMocks()
     selectedFilesRef.value = []

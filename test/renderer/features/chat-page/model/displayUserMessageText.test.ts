@@ -18,6 +18,18 @@ const createContent = (
 })
 
 describe('displayUserMessageText', () => {
+  it('keeps task references distinct from ordinary text in history and copy/search projection', () => {
+    const content = createContent({
+      text: '分析该字段',
+      inlineItems: [{ type: 'analysis', contextId: 'owned-context', label: '销售额', offset: 0 }]
+    })
+    expect(getVisibleUserContentBlocks(content)[0]).toEqual({
+      type: 'analysis',
+      contextId: 'owned-context',
+      label: '销售额'
+    })
+    expect(collectVisibleUserMessageText(content)).toBe('销售额分析该字段')
+  })
   it('uses the labels rendered for prompt and context mentions', () => {
     expect(
       getVisibleMentionLabel({

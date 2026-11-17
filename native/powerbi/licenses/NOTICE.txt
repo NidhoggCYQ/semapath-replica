@@ -1,0 +1,25 @@
+SemaPath Power BI bridge dependency notices
+
+The bridge is independently implemented in this repository. No original SemaPath binary or
+connector code is redistributed. Microsoft client libraries and the .NET runtime are third-party
+dependencies, not covered by this project's upstream application license.
+
+Microsoft.AnalysisServices 19.117.0
+Microsoft.AnalysisServices.AdomdClient 19.117.0
+Package sources: https://www.nuget.org/packages/Microsoft.AnalysisServices/19.117.0
+https://www.nuget.org/packages/Microsoft.AnalysisServices.AdomdClient/19.117.0
+Their exact NuGet metadata declares: https://go.microsoft.com/fwlink/?linkid=852989
+Unmodified English and Chinese EULA files are included here. Source EULA archive SHA-256:
+637b5911f2dc6887812962d6e7691c64eaf41e650e28e6a758a904721887c611
+Retrieved 2026-10-28 from the Microsoft license URL above.
+
+.NET 10.0.14 Windows x64 self-contained runtime
+The build copies LICENSE.TXT and THIRD-PARTY-NOTICES.TXT from the exact restored Microsoft
+runtime package into the published connector's licenses directory.
+
+Microsoft.Identity.Client / Microsoft.Identity.Client.Broker 4.83.3 are transitive Microsoft
+client dependencies locked in packages.lock.json. @azure/msal-node 7.1.2 is an MIT-licensed
+application dependency. Their license notices are retained with the dependency distribution.
+Microsoft-Identity-MIT.txt is the unmodified LICENSE from the exact MSAL.NET 4.83.3 tag:
+https://raw.githubusercontent.com/AzureAD/microsoft-authentication-library-for-dotnet/4.83.3/LICENSE
+The build also copies the MSAL Node package's own LICENSE into the published notices.

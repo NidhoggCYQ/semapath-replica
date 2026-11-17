@@ -92,8 +92,7 @@
       Your system: $1$\r$\n\
       App architecture: $3$\r$\n$\r$\n\
       Please download the correct version from:$\r$\n\
-      https://deepchat.thinkinai.xyz/"
-    ExecShell "open" "https://deepchat.thinkinai.xyz/"
+      https://github.com/NidhoggCYQ/semapath-replica/releases"
     Abort
   ${EndIf}
 
@@ -128,7 +127,7 @@
     StrCpy $5 "https://aka.ms/vs/17/release/vc_redist.$2.exe"
     StrCpy $6 "$TEMP\vc_redist.$2.exe"
     inetc::get /CAPTION " " /BANNER "Downloading Microsoft Visual C++ Redistributable ($2)..." "$5" "$6"
-    ExecWait "$6 /install /norestart"
+    ExecWait '"$6" /install /quiet /norestart'
     ; vc_redist exit code is unreliable, so we re-check registry
 
     Push $2 ; Pass arch to checkVCRedist again

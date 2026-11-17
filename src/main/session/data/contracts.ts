@@ -81,7 +81,12 @@ export interface SessionTranscriptMutationPort {
   }>
   commitRetryMessage(sessionId: string, orderSeq: number): void
   deleteMessage(sessionId: string, messageId: string): Promise<void>
-  editUserMessage(sessionId: string, messageId: string, text: string): Promise<ChatMessageRecord>
+  editUserMessage(
+    sessionId: string,
+    messageId: string,
+    text: string,
+    inlineItems?: SendMessageInput['inlineItems']
+  ): Promise<ChatMessageRecord>
   forkSessionFromMessage(
     sourceSessionId: string,
     targetSessionId: string,

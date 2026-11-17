@@ -624,5 +624,66 @@
     "noProgress": "連續相同的工具結果沒有進展，已停止。",
     "maxTurns": "已達到本輪對話上限，任務尚未完成。",
     "continueMessage": "請從剛才停下的地方繼續。"
+  },
+  "prediction": {
+    "title": "续写建议",
+    "description": "回答完成后，建议下一步可以追问的问题。建议仅填入草稿，由您编辑和发送。",
+    "hint": "按 Tab 填入建议，按 Esc 忽略；填入后可编辑，不会自动发送。",
+    "model": "建议模型",
+    "followSession": "跟随当前会话模型",
+    "reasoning": "推理设置",
+    "auto": "自动",
+    "on": "开启",
+    "off": "关闭",
+    "saveFailed": "设置未保存，请重试。",
+    "efforts": {
+      "none": "不推理",
+      "minimal": "最少",
+      "low": "低",
+      "medium": "中",
+      "high": "高",
+      "xhigh": "极高",
+      "max": "最大"
+    },
+    "errors": {
+      "provider_unavailable": "建议服务商不可用。",
+      "model_unavailable": "建议模型未启用或不支持文本聊天。",
+      "reasoning_unavailable": "该模型不支持所选推理设置，请改为自动。",
+      "budget_unavailable": "模型上下文或输出预算不足。",
+      "call_failed": "续写建议生成失败。",
+      "timeout": "续写建议请求超时。",
+      "invalid_output": "模型没有返回有效的建议。"
+    },
+    "fallback": {
+      "generated": "已使用当前会话模型生成建议。",
+      "empty": "当前会话模型没有生成建议。",
+      "failed": "当前会话模型回退也未成功；您仍可正常提问。",
+      "pending": "若指定了其他模型，将尝试回退当前会话模型。"
+    }
+  },
+  "messageActions": {
+    "failed": "消息操作未完成，请重试。",
+    "editing": "编辑消息并重新生成",
+    "editHint": "保存将重新生成并替换后续对话。引用随消息保留，可选中后删除；保存失败会保留本次编辑。",
+    "forkFailed": "分支未创建，请重试。",
+    "forkLoading": "正在创建分支…",
+    "busy": "请先等待当前回答结束或停止生成。"
+  },
+  "delivery": {
+    "title": "消息传递轨迹",
+    "description": "显示本次消息已记录的提交、传输与呈现时间。未采集的阶段不推算延迟。",
+    "empty": "此消息没有传递计时记录。旧消息不会补写历史计时。",
+    "inherited": "这是分支继承的历史消息；不会将父任务的传递记录当作新执行。",
+    "requests": "已记录的模型请求",
+    "refresh": "刷新轨迹",
+    "stages": {
+      "submission_received": "收到提交",
+      "submission_linked": "已关联生成消息",
+      "native_first_update": "原生端首次更新",
+      "client_update_received": "客户端收到首次更新",
+      "client_first_render": "客户端首次呈现",
+      "completed": "生成结束",
+      "failed": "生成失败"
+    }
   }
 }

@@ -75,6 +75,9 @@ import {
   sessionsSteerPendingInputRoute,
   sessionsTogglePinnedRoute,
   sessionsTranslateTextRoute,
+  sessionsGetComposerPredictionRoute,
+  sessionsGetMessageDeliveryTraceRoute,
+  sessionsRecordMessageDeliveryRoute,
   sessionsUpdateDisabledAgentToolsRoute,
   sessionsUpdateGenerationSettingsRoute,
   sessionsUpdateQueuedInputRoute
@@ -258,12 +261,39 @@ export function createSessionClient(bridge: DeepchatBridge = getDeepchatBridge()
     await bridge.invoke(sessionsDeleteMessageRoute.name, { sessionId, messageId })
   }
 
-  async function editUserMessage(sessionId: string, messageId: string, text: string) {
-    const result = await bridge.invoke(sessionsEditUserMessageRoute.name, {
+  async function getMessageDeliveryTrace(messageId: string) {
+    return await bridge.invoke(sessionsGetMessageDeliveryTraceRoute.name, { messageId })
+  }
+  async function recordMessageDelivery(
+    sessionId: string,
+    messageId: string,
+    stage: 'client_update_received' | 'client_first_render'
+  ) {
+    return await bridge.invoke(sessionsRecordMessageDeliveryRoute.name, {
       sessionId,
       messageId,
-      text
+      stage
     })
+  }
+  async function getComposerPrediction(sessionId: string, messageId: string) {
+    return await bridge.invoke(sessionsGetComposerPredictionRoute.name, { sessionId, messageId })
+  }
+
+  async function editUserMessage(
+    sessionId: string,
+    messageId: string,
+    text: string,
+    inlineItems?: DeepchatRouteInput<'sessions.editUserMessage'>['inlineItems']
+  ) {
+    const result = await bridge.invoke(
+      sessionsEditUserMessageRoute.name,
+      sessionsEditUserMessageRoute.input.parse({
+        sessionId,
+        messageId,
+        text,
+        inlineItems
+      })
+    )
     return result.message
   }
 
@@ -678,6 +708,9 @@ export function createSessionClient(bridge: DeepchatBridge = getDeepchatBridge()
     retryMessage,
     deleteMessage,
     editUserMessage,
+    getComposerPrediction,
+    getMessageDeliveryTrace,
+    recordMessageDelivery,
     forkSession,
     searchHistory,
     getSearchResults,

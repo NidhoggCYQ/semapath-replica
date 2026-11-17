@@ -4,8 +4,20 @@ const router = createRouter({
   history: createWebHashHistory(import.meta.env.BASE_URL),
   routes: [
     {
+      path: '/getting-started',
+      name: 'getting-started',
+      component: () => import('@/pages/GettingStartedPage.vue'),
+      meta: { titleKey: 'analysis.guide.title', icon: 'lucide:book-open' }
+    },
+    {
       path: '/',
-      redirect: '/chat'
+      redirect: '/analysis'
+    },
+    {
+      path: '/analysis',
+      name: 'analysis',
+      component: () => import('@/pages/analysis/AnalysisWorkbench.vue'),
+      meta: { titleKey: 'analysis.title', icon: 'lucide:chart-no-axes-combined' }
     },
     {
       path: '/chat',

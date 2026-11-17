@@ -1,7 +1,7 @@
 <template>
-  <div :class="['w-full', props.maxWidthClass]">
-    <div class="flex w-full items-center justify-between px-1 py-2">
-      <div class="flex min-w-0 items-center gap-1">
+  <div data-testid="chat-status-bar" :class="['w-full', props.maxWidthClass]">
+    <div class="flex w-full flex-wrap items-center justify-between gap-y-1 px-1 py-2">
+      <div class="flex min-w-0 max-w-full flex-wrap items-center gap-1">
         <template v-if="isAcpAgent">
           <div
             class="acp-agent-badge flex h-6 min-w-0 items-center gap-1 rounded-full px-2 text-xs text-muted-foreground dc-blur-panel"
@@ -91,7 +91,7 @@
               variant="ghost"
               size="sm"
               :class="[
-                'h-6 px-2 gap-1 text-xs text-muted-foreground hover:text-foreground dc-blur-panel',
+                'h-6 min-w-0 max-w-full px-2 gap-1 text-xs text-muted-foreground hover:text-foreground dc-blur-panel',
                 !isModelOptionsReady ? 'opacity-70' : ''
               ]"
               :aria-busy="!isModelOptionsReady"
@@ -101,7 +101,7 @@
                 custom-class="w-3.5 h-3.5"
                 :is-dark="themeStore.isDark"
               />
-              <span>{{ displayModelText }}</span>
+              <span class="truncate">{{ displayModelText }}</span>
               <Spinner v-if="showModelOptionsLoading" class="size-3" />
               <Icon v-else icon="lucide:chevron-down" class="w-3 h-3" />
             </DcButton>
@@ -312,7 +312,7 @@
         </Popover>
       </div>
 
-      <div class="flex items-center gap-1">
+      <div class="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-1">
         <div
           v-if="contextOccupancy"
           data-testid="context-occupancy"
@@ -1070,6 +1070,7 @@
         <DropdownMenu v-if="!isAcpAgent">
           <DropdownMenuTrigger as-child>
             <DcButton
+              data-testid="chat-permission-mode"
               variant="ghost"
               size="sm"
               :class="[

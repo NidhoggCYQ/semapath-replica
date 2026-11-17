@@ -1,3 +1,4 @@
+// SemaPath Replica modification: launcher stays inside the replica profile.
 import { createHash, randomUUID } from 'node:crypto'
 import {
   chmod,
@@ -77,6 +78,7 @@ export type CliLauncherServiceOptions = Readonly<{
   environmentPath?: string
   shell?: string
   localAppDataDirectory?: string
+  launcherDirectory?: string
   resolveCliDirectory(): string | null
 }>
 
@@ -318,6 +320,12 @@ export class CliLauncherService {
   }
 
   private get commandPath(): string | null {
+    if (this.options.launcherDirectory && this.isSupportedPlatform) {
+      return path.join(
+        this.options.launcherDirectory,
+        this.platform === 'win32' ? 'deepchat.cmd' : 'deepchat'
+      )
+    }
     if (this.platform === 'darwin' || this.platform === 'linux') {
       return path.join(this.options.homeDirectory, '.local', 'bin', 'deepchat')
     }
@@ -336,6 +344,7 @@ export class CliLauncherService {
     const resolvedDirectory = path.resolve(directory)
     const appRoot = resolveCliAppRoot(resolvedDirectory)
     const hostCandidates = [
+      path.join(appRoot, 'SemaPathReplicaDev.exe'),
       path.join(appRoot, 'MacOS', 'DeepChat'),
       path.join(appRoot, 'deepchat.bin'),
       path.join(appRoot, 'DeepChat.exe'),

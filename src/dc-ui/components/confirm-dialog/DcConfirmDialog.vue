@@ -18,6 +18,7 @@ interface Props {
   open: boolean
   title: string
   description?: string
+  descriptionClass?: string
   icon?: string
   danger?: boolean
   confirmLabel?: string
@@ -59,7 +60,9 @@ const handleOpenChange = (value: boolean) => {
           <Icon v-if="icon" :icon="icon" class="size-4 text-muted-foreground" />
           <span>{{ title }}</span>
         </AlertDialogTitle>
-        <AlertDialogDescription v-if="description">{{ description }}</AlertDialogDescription>
+        <AlertDialogDescription v-if="description" :class="descriptionClass">{{
+          description
+        }}</AlertDialogDescription>
       </AlertDialogHeader>
 
       <slot />
